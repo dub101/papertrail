@@ -1,0 +1,13 @@
+# Qdrant local persistence
+qdrant_storage/
+
+# Python venv
+.venv/
+
+# Python caches
+__pycache__/
+*.pyc
+
+# env files
+.env
+
