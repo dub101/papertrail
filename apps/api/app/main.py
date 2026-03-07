@@ -79,10 +79,32 @@ def chat(req: ChatRequest):
         if vs is not None:
             try:
                 yield sse("status", {"stage": "retrieval", "message": "Searching cached papers in Qdrant..."})
-                cached = vs.search(req.message, limit=req.top_n)  # returns list[payload dict]
+                cached = vs.search(req.message, limit=req.top_n)
                 if cached:
                     yield sse("status", {"stage": "retrieval", "message": f"Using {len(cached)} cached papers"})
-                    yield from format_papers_as_stream(cached, source_label="Qdrant cache")
+
+                    # NEW: category expansion
+                    cats = []
+                    for p in cached:
+                        cats.extend((p.get("categories") or [])[:2])  # take first 2 categories per paper
+                    # unique, preserve order, limit to a few categories
+                    seen = set()
+                    cats = [c for c in cats if not (c in seen or seen.add(c))]
+                    cats = cats[:3]
+
+                    yield sse("status", {"stage": "retrieval", "message": f"Expanding by categories: {', '.join(cats) or 'none'}"})
+                    expanded = vs.expand_by_categories(req.message, cats, limit=req.top_n * 3)
+
+                    # merge + dedupe by arxiv_id (keep cached first)
+                    by_id = {}
+                    for p in cached + expanded:
+                        aid = p.get("arxiv_id")
+                        if aid and aid not in by_id:
+                            by_id[aid] = p
+
+                    merged = list(by_id.values())[: req.top_n]
+
+                    yield from format_papers_as_stream(merged, source_label="Qdrant cache + category expansion")
                     return
                 else:
                     yield sse("status", {"stage": "retrieval", "message": "No cache hits, falling back to arXiv"})

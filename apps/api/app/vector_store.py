@@ -146,4 +146,28 @@ class VectorStore:
         # resp.points is a list of records; each record has .payload
         return [p.payload for p in resp.points if p.payload is not None]
 
+    def expand_by_categories(self, query: str, categories: list[str], limit: int = 10) -> list[dict]:
+        if not categories:
+            return []
+
+        query_vector = self.embed_texts([query])[0]
+
+        cat_filter = qm.Filter(
+            must=[
+                qm.FieldCondition(
+                    key="categories",
+                    match=qm.MatchAny(any=categories),
+                )
+            ]
+        )
+
+        resp = self.client.query_points(
+            collection_name=self.collection,
+            query=query_vector,
+            query_filter=cat_filter,
+            limit=limit,
+            with_payload=True,
+        )
+
+        return [p.payload for p in resp.points if p.payload is not None]
 
