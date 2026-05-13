@@ -1,13 +1,36 @@
-# Qdrant local persistence
+# --- Qdrant local persistence ---
 qdrant_storage/
 
-# Python venv
+# --- Python virtualenv (uv-managed) ---
 .venv/
 
-# Python caches
+# --- Python caches ---
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
 
-# env files
+# --- Tooling caches ---
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# --- Build artifacts ---
+build/
+dist/
+*.egg
+
+# --- Env files ---
 .env
+.env.local
+.env.*.local
+!.env.example
 
+# --- IDE / OS ---
+.idea/
+.vscode/
+*.swp
+.DS_Store

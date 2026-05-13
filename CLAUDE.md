@@ -1,0 +1,109 @@
+# CLAUDE.md — PaperTrail project guide
+
+> **Before anything else, read the canonical brief**: [`docs/PROJECT_BRIEF.md`](docs/PROJECT_BRIEF.md). That document is the authoritative spec. This file is the operational guide on top of it.
+
+## How to work with this user
+
+This is a multi-session learning project. The user is preparing for the **Claude Certified Architect – Foundations** exam. The 7-step teaching pattern is **non-negotiable** on every step:
+
+1. Explain the concept in plain language before any code
+2. Ask user how they would approach it
+3. Listen, correct gaps, confirm understanding
+4. Walk through the logic before writing anything
+5. Write code with comments explaining every decision
+6. After each implementation, ask a cert-exam-style question on what we just built
+7. Wait for user's answer before moving to the next step
+
+After each component, **map it to a cert domain and task statement** (e.g., "This is D1, TS 1.1"). If the user says "just do it" or "skip the explanation," push back — that defeats the purpose. See memory `[[feedback-teaching-pattern]]`.
+
+## Stack
+
+- Python 3.11+, `uv` for dependencies, Docker + docker-compose
+- `anthropic` SDK (raw, **no wrappers**), `mcp` SDK (server built from scratch)
+- pydantic v2, httpx async, asyncio, structlog → JSON, rich
+- pytest + pytest-asyncio, mypy strict, ruff, `act` for local CI
+
+## Models policy
+
+- `claude-haiku-4-5` — all agents in all architectures by default
+- `claude-sonnet-4-6` — Evaluator Agent only
+- `claude-opus` — **never used, in any architecture, under any circumstance**
+
+Rationale in ADR-0003.
+
+## Layout
+
+```
+.
+├── src/papertrail/
+│   ├── __init__.py
+│   └── architectures/        # arch_00 through arch_06 land here
+├── tests/
+├── apps/                     # legacy code; moves into arch_00 in step 4
+├── qdrant_storage/           # Qdrant volume; preserve, gitignored
+├── docs/
+│   ├── PROJECT_BRIEF.md      # canonical spec
+│   └── decisions/            # ADRs
+├── docker-compose.yml        # Qdrant service
+├── pyproject.toml            # deps + ruff/mypy/pytest/coverage config
+└── .github/workflows/ci.yml  # ruff + mypy + pytest
+```
+
+## Branching
+
+- `main` protected, `dev` protected (integration)
+- `feature/*` per architecture (`feature/arch-01-sequential`, etc.)
+- Conventional commits: `feat(arch-01): ...`, `test(tools): ...`, `fix(mcp): ...`, `chore(ci): ...`
+
+## Engineering standards
+
+- Full type hints; **mypy strict** must pass
+- All public functions/classes have docstrings
+- Every new module has a corresponding test file
+- Coverage floor 80% in CI, target 90%+
+- Ruff zero-warning before commit
+- No hardcoded secrets — `.env` only
+- Anthropic API calls **always mocked** in unit tests
+- After Session 1 scaffolding, no direct push to `main`/`dev` — PRs only
+
+## Architectures roadmap
+
+| ID | Pattern | Status |
+|---|---|---|
+| arch_00 | Naive baseline (no LLM) | not yet adapted |
+| arch_01 | Sequential Pipeline | not started |
+| arch_02 | Map-Reduce | not started |
+| arch_03 | Parallel Fan-Out | not started |
+| arch_04 | Plan-and-Execute | not started |
+| arch_05 | Critic-Revisor Loop | not started |
+| arch_06 | Hierarchical + MCP | not started |
+
+## Session continuity — five-layer persistence
+
+See memory `[[reference-session-continuity]]`.
+
+1. **This file** (auto-loaded, operational guide, **current cursor**)
+2. **Memory** at `~/.claude/projects/.../memory/` (auto-loaded, collaboration rules + state)
+3. **ADRs** in `docs/decisions/` (durable decisions with rationale)
+4. **Per-arch READMEs** in `src/papertrail/architectures/arch_NN_*/README.md`
+5. **Git** + conventional commits
+
+## Current cursor
+
+**Session 1 in progress.** Step ordering:
+
+1. ✅ Project scaffolding (D3) — this commit
+2. ⬜ Benchmark interface — `BenchmarkResult` pydantic + `Architecture` base class (D4)
+3. ⬜ Shared tool layer — move legacy retrieval into `src/papertrail/tools/` (D2 prep)
+4. ⬜ arch_00 adapter — wrap legacy as the baseline, zero Claude tokens (D1)
+5. ⬜ First benchmark run + Evaluator stub (D1 + D4)
+
+**Deferred decision (revisit at step 4):** arch_00 timeline/impact stubs — deterministic heuristics (year buckets, category counts) or null fields (Evaluator floors at zero on those dimensions)?
+
+## Update protocol
+
+At the end of each session:
+- Update the **Current cursor** section above
+- Save new memories
+- Write/update ADRs for any decisions made
+- Commit on the appropriate branch with a conventional message

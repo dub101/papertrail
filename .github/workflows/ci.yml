@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+# Cancel in-progress runs of the same workflow for the same ref.
+# Saves CI minutes when commits land in quick succession on a feature branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true     # cache uv's resolver + downloads
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies (locked)
+        run: uv sync --locked
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: Mypy strict
+        run: uv run mypy src
+
+      - name: Pytest with coverage gate
+        # Coverage floor is enforced HERE, not in pyproject.toml,
+        # so that local `pytest` doesn't fail when running a single test.
+        run: uv run pytest --cov=src/papertrail --cov-report=term-missing --cov-fail-under=80

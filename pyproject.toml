@@ -1,0 +1,107 @@
+[project]
+name = "papertrail"
+version = "0.1.0"
+description = "Multi-architecture arxiv research intelligence system — Claude Certified Architect Foundations cert prep"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+authors = [
+    { name = "dub101" },
+]
+license = { text = "MIT" }
+
+# Runtime dependencies.
+# Loose lower bounds; uv.lock pins exact versions for reproducibility.
+dependencies = [
+    "anthropic>=0.40.0",       # Anthropic SDK (used from arch_01 onward)
+    "mcp>=1.0.0",              # Official MCP SDK (used for arch_06 server)
+    "pydantic>=2.6",           # v2 — strict validation, used everywhere
+    "httpx>=0.27.0",           # async HTTP — replaces feedparser's blocking I/O later
+    "structlog>=24.1.0",       # structured JSON logging per run
+    "rich>=13.7.0",            # CLI output formatting
+    "python-dotenv>=1.0.0",    # .env loading
+    "feedparser>=6.0.11",      # arxiv Atom feed parser (legacy compatibility for arch_00)
+    "qdrant-client>=1.10.0",   # vector store client (arch_00 cache)
+    "fastembed>=0.3.0",        # local embeddings (arch_00 cache)
+]
+
+[dependency-groups]
+# Dev-only deps. Installed by `uv sync` by default; excluded with `uv sync --no-dev`.
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=5.0",
+    "ruff>=0.6.0",
+    "mypy>=1.11",
+    "pre-commit>=3.7",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/papertrail"]
+
+
+# --- ruff: lint + format ---
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+extend-exclude = ["apps/"]     # legacy code — moves into arch_00 in step 4, brought into compliance there
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "SIM", # flake8-simplify
+    "RUF", # ruff-specific rules
+]
+ignore = [
+    "E501",   # line length — handled by ruff format
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+
+# --- mypy: strict typing ---
+[tool.mypy]
+python_version = "3.11"
+strict = true
+show_error_codes = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+# Exclude the pre-existing legacy code; it gets brought into compliance when adapted as arch_00 in step 4.
+exclude = ["apps/", "build/", "dist/"]
+
+
+# --- pytest ---
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "--strict-markers -ra"
+markers = [
+    "integration: marks tests that hit real services (deselect with '-m \"not integration\"')",
+]
+
+
+# --- coverage: configured here; CI passes --cov-fail-under=80 ---
+[tool.coverage.run]
+source = ["src/papertrail"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
