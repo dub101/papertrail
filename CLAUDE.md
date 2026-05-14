@@ -106,15 +106,15 @@ See memory `[[reference-session-continuity]]`.
 
 ## Current cursor
 
-**Session 2 in progress.** Step ordering:
+**Session 2 wrapped.** Step ordering:
 
 1. ✅ Project scaffolding — infrastructure (no cert mapping)
 2. ✅ Benchmark interface — `BenchmarkResult` pydantic + `Architecture` ABC (foundation for D4 TS 4.3, applies when wrapped as tool output)
 3. ✅ Shared tool layer — `arxiv_search` / `arxiv_fetch` / `format_citation` in `src/papertrail/tools/` (foundation for D2 TS 2.1; D2 TS 2.2 already hit by the 429-retry policy)
-4. ⬜ arch_00 adapter — wrap legacy `apps/` code as the deterministic no-LLM baseline, zero Claude tokens (no cert mapping; the floor)
-5. ⬜ First benchmark run + Evaluator stub (Evaluator is LLM-based → D4 TS 4.4)
+4. ✅ arch_00 baseline — `src/papertrail/architectures/arch_00_baseline/` with `BaselineArchitecture`. Zero Claude tokens; one arxiv call; ≤3-bucket date partition; hybrid per-field policy (heuristic for `summary_about` + `summary_relation_to_topic` + `overall_summary`; distinct disclaimer constants for `summary_problem`/`approach`/`impact` + `era.narrative`); `confidence=0.5` uniform; `citation_*=None`. Raises `BaselineTooFewResultsError` if arxiv returns <8 usable papers. (No cert mapping — the floor.)
+5. ⬜ First benchmark run + Evaluator stub (Evaluator is LLM-based → D4 TS 4.4) — **next session resumes here**
 
-**Deferred decision (live at step 4):** arch_00 timeline/impact stubs — deterministic heuristics (year buckets, category counts) or null fields (Evaluator floors at zero on those dimensions)?
+**Deferred decision (resolved at step 4):** picked **Option C** — hybrid heuristic-or-disclaimer with structural completeness (every field populated, never null). Rationale: distinct dimension-named disclaimers let the Evaluator attribute floor scores per-dimension. See `src/papertrail/architectures/arch_00_baseline/README.md` for the per-field table.
 
 ## Update protocol
 
