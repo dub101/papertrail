@@ -106,15 +106,20 @@ See memory `[[reference-session-continuity]]`.
 
 ## Current cursor
 
-**Session 2 wrapped.** Step ordering:
+**Session 3 wrapped.** Step ordering:
 
 1. ✅ Project scaffolding — infrastructure (no cert mapping)
 2. ✅ Benchmark interface — `BenchmarkResult` pydantic + `Architecture` ABC (foundation for D4 TS 4.3, applies when wrapped as tool output)
 3. ✅ Shared tool layer — `arxiv_search` / `arxiv_fetch` / `format_citation` in `src/papertrail/tools/` (foundation for D2 TS 2.1; D2 TS 2.2 already hit by the 429-retry policy)
 4. ✅ arch_00 baseline — `src/papertrail/architectures/arch_00_baseline/` with `BaselineArchitecture`. Zero Claude tokens; one arxiv call; ≤3-bucket date partition; hybrid per-field policy (heuristic for `summary_about` + `summary_relation_to_topic` + `overall_summary`; distinct disclaimer constants for `summary_problem`/`approach`/`impact` + `era.narrative`); `confidence=0.5` uniform; `citation_*=None`. Raises `BaselineTooFewResultsError` if arxiv returns <8 usable papers. (No cert mapping — the floor.)
-5. ⬜ First benchmark run + Evaluator stub (Evaluator is LLM-based → D4 TS 4.4) — **next session resumes here**
+5. ✅ Evaluator + benchmark runner + first real run — `src/papertrail/evaluator.py` (`Evaluator`, `DryRunEvaluator`, forced `tool_use` with `EvaluatorVerdict` schema, exact-tokens + estimated-$ usage tracking via `MODEL_PRICING_PER_MTOK`), `src/papertrail/prompts/evaluator_v1.md`, `src/papertrail/runner.py` (architecture registry + JSON persistence to `benchmark_runs/`), `scripts/run_benchmark.py` (CLI with `--dry-run` / `--no-evaluator` / `--verbose`). First real arch_00 + Sonnet run on "self-attention" → overall=0.18, confidence=0.92, per-dimension asymmetry between heuristic and disclaimer fields confirms the Phase-3 design. Cert mappings: **D4 TS 4.6** (independent review instance, calibrated confidence) and **D4 TS 4.3** (forced `tool_use` + JSON schema). See ADR-0004.
+6. ⬜ arch_01 sequential pipeline — first real LLM-driven architecture; D1 TS 1.1 (agentic loop), D1 TS 1.6 (task decomposition / prompt chaining) — **next session resumes here**
 
-**Deferred decision (resolved at step 4):** picked **Option C** — hybrid heuristic-or-disclaimer with structural completeness (every field populated, never null). Rationale: distinct dimension-named disclaimers let the Evaluator attribute floor scores per-dimension. See `src/papertrail/architectures/arch_00_baseline/README.md` for the per-field table.
+**Open/deferred items:**
+
+- **Retry-with-error-feedback** (D4 TS 4.4): not implemented; exception split (`EvaluatorRefusedError` vs `EvaluatorInvalidOutputError`) leaves room. Revisit when real failures observed.
+- **arxiv pricing of `MODEL_PRICING_PER_MTOK`**: hand-maintained, verified 2026-05-14. Update when Anthropic publishes new rates.
+- **Architecture-side cost tracking**: `BenchmarkResult.telemetry.total_cost_usd` is populated by each architecture (arch_00 always 0). The evaluator's cost lives separately on `EvaluatorScore.usage.cost_usd_estimated` — by design, since the evaluator is a separate run-time concern.
 
 ## Update protocol
 

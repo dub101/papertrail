@@ -35,5 +35,8 @@ dist/
 *.swp
 .DS_Store
 
+# --- Benchmark run artifacts (produced by scripts/run_benchmark.py) ---
+benchmark_runs/
+
 # --- Local-only reference material (not for distribution) ---
 CCA_Foundations_Guide.pdf
