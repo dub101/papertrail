@@ -80,7 +80,7 @@ Rationale in ADR-0003.
 - Ruff zero-warning before commit
 - No hardcoded secrets — `.env` only
 - Anthropic API calls **always mocked** in unit tests
-- After Session 1 scaffolding, no direct push to `main`/`dev` — PRs only
+- After Session 1 scaffolding, no work directly on `main`/`dev` — always cut a `feature/*` branch first. Merging back is fine via PR *or* local merge (`git merge --no-ff` + push); the rule is about *where* you edit, not *how* the merge happens. Delete the feature branch (local + remote) after merge.
 
 ## Architectures roadmap
 
