@@ -106,20 +106,21 @@ See memory `[[reference-session-continuity]]`.
 
 ## Current cursor
 
-**Session 1 in progress.** Step ordering:
+**Session 2 in progress.** Step ordering:
 
-1. ✅ Project scaffolding (D3) — this commit
-2. ⬜ Benchmark interface — `BenchmarkResult` pydantic + `Architecture` base class (D4)
-3. ⬜ Shared tool layer — move legacy retrieval into `src/papertrail/tools/` (D2 prep)
-4. ⬜ arch_00 adapter — wrap legacy as the baseline, zero Claude tokens (D1)
-5. ⬜ First benchmark run + Evaluator stub (D1 + D4)
+1. ✅ Project scaffolding — infrastructure (no cert mapping)
+2. ✅ Benchmark interface — `BenchmarkResult` pydantic + `Architecture` ABC (foundation for D4 TS 4.3, applies when wrapped as tool output)
+3. ✅ Shared tool layer — `arxiv_search` / `arxiv_fetch` / `format_citation` in `src/papertrail/tools/` (foundation for D2 TS 2.1; D2 TS 2.2 already hit by the 429-retry policy)
+4. ⬜ arch_00 adapter — wrap legacy `apps/` code as the deterministic no-LLM baseline, zero Claude tokens (no cert mapping; the floor)
+5. ⬜ First benchmark run + Evaluator stub (Evaluator is LLM-based → D4 TS 4.4)
 
-**Deferred decision (revisit at step 4):** arch_00 timeline/impact stubs — deterministic heuristics (year buckets, category counts) or null fields (Evaluator floors at zero on those dimensions)?
+**Deferred decision (live at step 4):** arch_00 timeline/impact stubs — deterministic heuristics (year buckets, category counts) or null fields (Evaluator floors at zero on those dimensions)?
 
 ## Update protocol
 
 At the end of each session:
-- Update the **Current cursor** section above
-- Save new memories
+- Produce a four-list end-of-session summary in chat: **done overall** / **this session** / **next session** / **outstanding** (see memory `[[feedback-session-workflow]]`). This is the resumption anchor for the next session — without it, the next session pays ~30 minutes re-deriving state.
+- Update the **Current cursor** section above to match the summary
+- Save new memories or update existing ones
 - Write/update ADRs for any decisions made
-- Commit on the appropriate branch with a conventional message
+- Commit on the appropriate feature branch with a conventional message, merge into `dev`, delete the feature branch
