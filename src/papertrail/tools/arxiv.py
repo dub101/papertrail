@@ -1,10 +1,16 @@
 """arXiv tool primitives.
 
-Public surface (this commit adds ``arxiv_search``; ``arxiv_fetch`` follows):
+Public surface:
 
 - ``ArxivPaper``    — pydantic model echoing one Atom entry
 - ``arxiv_search``  — async free-text search, returns up to ``max_results`` papers
+- ``arxiv_fetch``   — async lookup by id, returns one paper or raises ``ValueError``
 - ``SortBy``        — Literal of accepted sort modes
+
+``arxiv_search`` and ``arxiv_fetch`` deliberately return the same shape
+(``ArxivPaper``). The distinction lives in the *contract*, not the response
+data: search is a query (empty result is legitimate), fetch is a lookup
+(empty result is a contract violation -> ``ValueError``).
 
 Design note — why ``ArxivPaper`` and not ``PaperEntry`` from ``benchmark.py``:
 
@@ -297,3 +303,63 @@ async def arxiv_search(
     root = ET.fromstring(response.text)
     entries = root.findall(f"{{{_ATOM_NS}}}entry")
     return [_parse_entry(entry) for entry in entries]
+
+
+async def arxiv_fetch(arxiv_id: str) -> ArxivPaper:
+    """Look up one paper by arXiv id and return its full ``ArxivPaper``.
+
+    Accepts both the bare id (``"1706.03762"``) and the versioned form
+    (``"1706.03762v5"``). arXiv's ``id_list`` endpoint handles both
+    server-side; the returned ``ArxivPaper.arxiv_id`` is whatever arXiv
+    echoes back (usually with version suffix).
+
+    Asymmetric with ``arxiv_search`` on purpose:
+
+    * ``arxiv_search("foo")`` returning ``[]`` means "no matches" — legitimate.
+    * ``arxiv_fetch("9999.99999")`` finding nothing means the caller named a
+      specific id that doesn't exist; we raise ``ValueError`` because the
+      caller's contract assumption was wrong.
+
+    Parameters
+    ----------
+    arxiv_id:
+        The arXiv identifier, with or without version suffix. Passed verbatim
+        to arXiv's ``id_list`` parameter — we do not validate the format
+        client-side because the tool layer's job is faithful echo, not policy
+        (the deliverable layer enforces id-format policy at PaperEntry).
+
+    Returns
+    -------
+    ArxivPaper
+        The single paper matching that id.
+
+    Raises
+    ------
+    ValueError
+        If ``arxiv_id`` is empty/whitespace, or if arXiv returns zero entries
+        for it.
+    httpx.HTTPError
+        On network failure or non-recoverable HTTP error. Architectures
+        decide whether to retry; this function does not.
+    """
+    if not arxiv_id.strip():
+        raise ValueError("arxiv_id must be a non-empty string")
+
+    params: dict[str, str | int] = {"id_list": arxiv_id}
+
+    async with httpx.AsyncClient(
+        timeout=HTTP_TIMEOUT_SECONDS,
+        headers={"User-Agent": USER_AGENT},
+    ) as client:
+        response = await _get_with_arxiv_retry(client, params)
+
+    root = ET.fromstring(response.text)
+    entries = root.findall(f"{{{_ATOM_NS}}}entry")
+    if not entries:
+        raise ValueError(f"arxiv_id not found: {arxiv_id}")
+
+    # arXiv's ``id_list`` is documented to return at most one entry per id.
+    # If it returns more (protocol violation), we take the first rather than
+    # raise — defensive coding for an unlikely case would add complexity
+    # without a real failure mode to protect against.
+    return _parse_entry(entries[0])
