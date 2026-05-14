@@ -14,7 +14,23 @@ This is a multi-session learning project. The user is preparing for the **Claude
 6. After each implementation, ask a cert-exam-style question on what we just built
 7. Wait for user's answer before moving to the next step
 
-After each component, **map it to a cert domain and task statement** (e.g., "This is D1, TS 1.1"). If the user says "just do it" or "skip the explanation," push back — that defeats the purpose. See memory `[[feedback-teaching-pattern]]`.
+After each component, **map it to a cert domain and task statement** (e.g., "This is D1, TS 1.1"). Mappings must be **literal** — cite a TS only if its actual content matches. For foundation code not yet LLM-facing, write *"Foundation for D2 TS 2.1 — applies when wrapped as a tool in arch_01"* rather than over-claiming. If the user says "just do it" or "skip the explanation," push back — that defeats the purpose. See memory `[[feedback-teaching-pattern]]`.
+
+## Cert guide — authoritative reference
+
+The official exam guide PDF lives at **`CCA_Foundations_Guide.pdf`** in the repo root. **Gitignored** — local-only, not for distribution. Read it (via the `Read` tool with `pages` parameter) whenever you need to verify a cert mapping rather than guessing.
+
+Domain titles and weights from the guide:
+
+| | Domain | Weight |
+|---|---|---|
+| **D1** | Agentic Architecture & Orchestration | 27% |
+| **D2** | Tool Design & MCP Integration | 18% |
+| **D3** | Claude Code Configuration & Workflows | 20% |
+| **D4** | Prompt Engineering & Structured Output | 20% |
+| **D5** | Context Management & Reliability | 15% |
+
+D5 is **context engineering and multi-agent error propagation**, NOT "operations" or testing. Testing/CI strategy is *not* in the cert at all.
 
 ## Stack
 

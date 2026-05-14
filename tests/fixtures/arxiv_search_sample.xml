@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom">
+  <link href="http://arxiv.org/api/query?search_query=all:attention&amp;start=0&amp;max_results=2" rel="self" type="application/atom+xml"/>
+  <title type="html">ArXiv Query: search_query=all:attention&amp;start=0&amp;max_results=2</title>
+  <id>http://arxiv.org/api/abc</id>
+  <updated>2024-01-15T00:00:00-05:00</updated>
+  <opensearch:totalResults>2</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <opensearch:itemsPerPage>2</opensearch:itemsPerPage>
+  <entry>
+    <id>http://arxiv.org/abs/1706.03762v5</id>
+    <updated>2017-12-06T18:30:46Z</updated>
+    <published>2017-06-12T17:57:34Z</published>
+    <title>Attention Is All You Need</title>
+    <summary>  The dominant sequence transduction models are based on complex recurrent or
+convolutional neural networks. We propose a new simple network architecture,
+the Transformer, based solely on attention mechanisms.</summary>
+    <author>
+      <name>Ashish Vaswani</name>
+    </author>
+    <author>
+      <name>Noam Shazeer</name>
+    </author>
+    <author>
+      <name>Niki Parmar</name>
+    </author>
+    <link href="http://arxiv.org/abs/1706.03762v5" rel="alternate" type="text/html"/>
+    <link title="pdf" href="http://arxiv.org/pdf/1706.03762v5" rel="related" type="application/pdf"/>
+    <arxiv:primary_category xmlns:arxiv="http://arxiv.org/schemas/atom" term="cs.CL" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.CL" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2205.14135v2</id>
+    <updated>2022-06-24T06:49:35Z</updated>
+    <published>2022-05-27T17:53:09Z</published>
+    <title>FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness</title>
+    <summary>Transformers are slow and memory-hungry on long sequences, since the time and
+memory complexity of self-attention are quadratic in sequence length.</summary>
+    <author>
+      <name>Tri Dao</name>
+    </author>
+    <link href="http://arxiv.org/abs/2205.14135v2" rel="alternate" type="text/html"/>
+    <link title="pdf" href="http://arxiv.org/pdf/2205.14135v2" rel="related" type="application/pdf"/>
+    <arxiv:primary_category xmlns:arxiv="http://arxiv.org/schemas/atom" term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+  </entry>
+</feed>
