@@ -116,21 +116,40 @@ See memory `[[reference-session-continuity]]`.
 
 ## Current cursor
 
-**Session 4 bookmarked mid-Step-6.** Design complete, implementation pending. Step ordering:
+**Session 5 in progress — arch_01 stages 1-3 shipped; stage 4 (era partition) is next.** Step ordering:
 
 1. ✅ Project scaffolding — infrastructure (no cert mapping)
 2. ✅ Benchmark interface — `BenchmarkResult` pydantic + `Architecture` ABC (foundation for D4 TS 4.3, applies when wrapped as tool output)
 3. ✅ Shared tool layer — `arxiv_search` / `arxiv_fetch` / `format_citation` in `src/papertrail/tools/` (foundation for D2 TS 2.1; D2 TS 2.2 already hit by the 429-retry policy)
-4. ✅ arch_00 baseline — `src/papertrail/architectures/arch_00_baseline/` with `BaselineArchitecture`. Zero Claude tokens; one arxiv call; ≤3-bucket date partition; hybrid per-field policy (heuristic for `summary_about` + `summary_relation_to_topic` + `overall_summary`; distinct disclaimer constants for `summary_problem`/`approach`/`impact` + `era.narrative`); `confidence=0.5` uniform; `citation_*=None`. Raises `BaselineTooFewResultsError` if arxiv returns <8 usable papers. (No cert mapping — the floor.)
-5. ✅ Evaluator + benchmark runner + first real run — `src/papertrail/evaluator.py` (`Evaluator`, `DryRunEvaluator`, forced `tool_use` with `EvaluatorVerdict` schema, exact-tokens + estimated-$ usage tracking via `MODEL_PRICING_PER_MTOK`), `src/papertrail/prompts/evaluator_v1.md`, `src/papertrail/runner.py` (architecture registry + JSON persistence to `benchmark_runs/`), `scripts/run_benchmark.py` (CLI with `--dry-run` / `--no-evaluator` / `--verbose`). First real arch_00 + Sonnet run on "self-attention" → overall=0.18, confidence=0.92, per-dimension asymmetry between heuristic and disclaimer fields confirms the Phase-3 design. Cert mappings: **D4 TS 4.6** (independent review instance, calibrated confidence) and **D4 TS 4.3** (forced `tool_use` + JSON schema). See ADR-0004.
-6. 🟡 arch_01 sequential pipeline — **design wrapped in ADR-0005; implementation pending.** Six stages: search (agentic loop, D1 TS 1.1) → triage → per-paper synthesis (batched 5 papers/call) → era partition + narrative → executive summary → assembly. Cert hooks: D1 TS 1.1, D1 TS 1.6, D4 TS 4.3, D5 TS 5.1, D5 TS 5.3. **Resume by writing `src/papertrail/architectures/arch_01_sequential/search.py` (the SearchAgent for stage 1).** Branch `feature/arch-01-sequential` was used for ADR-0005; cut a fresh branch from `dev` next session for the implementation.
+4. ✅ arch_00 baseline — `src/papertrail/architectures/arch_00_baseline/` with `BaselineArchitecture`. Zero Claude tokens; one arxiv call; ≤3-bucket date partition; hybrid per-field policy; `confidence=0.5` uniform; `citation_*=None`. Raises `BaselineTooFewResultsError` if arxiv returns <8 usable papers (arch_00's own strict floor, decoupled from the schema by ADR-0006). (No cert mapping — the floor.)
+5. ✅ Evaluator + benchmark runner + first real run — `src/papertrail/evaluator.py`, `src/papertrail/prompts/evaluator_v1.md`, `src/papertrail/runner.py`, `scripts/run_benchmark.py`. First real arch_00 + Sonnet run on "self-attention" → overall=0.18. Cert: **D4 TS 4.6**, **D4 TS 4.3**. See ADR-0004.
+6. 🟡 arch_01 sequential pipeline — stages 1-3 shipped on `dev`, stages 4-6 pending. Cert hooks across the architecture: D1 TS 1.1, D1 TS 1.6, D4 TS 4.3, D4 TS 4.4, D5 TS 5.1, D5 TS 5.3, D5 TS 5.6.
+   - ✅ **Stage 1 — `SearchAgent`** (`src/papertrail/architectures/arch_01_sequential/search.py`). Agentic loop over `arxiv_search`; compact tool_result hand-back; partial-results recovery via `ErrorRecord(recovered=True)` when `stop_reason != "end_turn"` but ≥ `MIN_PAPERS_TO_PROCEED=4` papers collected. Cert: **D1 TS 1.1**, **D5 TS 5.1**, **D5 TS 5.3**. See ADR-0006 (schema floor relaxation 8 → 4).
+   - ✅ **Stage 2 — `TriageAgent`** (`src/papertrail/architectures/arch_01_sequential/triage.py`). Single forced `tool_use` call producing one decision per candidate (included|rejected + reason). Four exception classes for fail-loud classification; `TriageInsufficientQualityError` distinct from `TriageInvalidOutputError`. Full audit trail via `CandidateRecord` flowing to `Telemetry.candidates`. Cert: **D4 TS 4.3**, **D4 TS 4.1**, **D5 TS 5.6**.
+   - ✅ **Stage 3 — `SynthesisAgent`** (`src/papertrail/architectures/arch_01_sequential/synthesis.py`). Parallel batched synthesis via `asyncio.gather` + `_safe_batch` wrapper. Balanced batch sizes near `TARGET_BATCH_SIZE=5`. One retry round on missing papers; permanent misses get distinct per-dimension disclaimer text + `ErrorRecord(recovered=True)`. Hard-fail on zero-success. Cert: **D1 TS 1.6**, **D4 TS 4.3**, **D4 TS 4.4** (first introduction; un-defers the policy left open in ADR-0005), **D5 TS 5.1**, **D5 TS 5.3**.
+   - ⬜ **Stage 4 — Era partition + narrative.** **Resume here.** Single forced `tool_use` call: input is the 4-12 synthesised papers; output is 2-4 eras (`era_id`, name, date range, narrative, `paper_ids`) satisfying `Deliverable.timeline` constraints. Cert hooks expected: **D4 TS 4.3** (schema-driven output), **D5 TS 5.6** (the era narrative must preserve per-paper claim-source mappings), **D1 TS 1.6** (first cross-paper integration pass in arch_01).
+   - ⬜ **Stage 5 — Executive summary.** Single forced `tool_use` call producing `Deliverable.overall_summary` (150-200 words). Re-use of the forced-tool pattern.
+   - ⬜ **Stage 6 — Assembly + `SequentialArchitecture` orchestrator.** Pure-code stage that wires all six stages into one `Architecture.run(topic) -> BenchmarkResult`. Includes provenance injection, telemetry aggregation, and confidence default (open item below).
+- Auxiliary: `src/papertrail/pricing.py` extracted in stage 2's session as the third caller appeared (Evaluator + SearchAgent + TriageAgent); `compute_cost_usd` + `MODEL_PRICING_PER_MTOK` now live there.
+- Test count: **221 passing**, ruff + mypy strict clean across all of `src/`. arch_00 + arch_01 stages 1-3 covered.
 
 **Open/deferred items:**
 
-- **Retry-with-error-feedback** (D4 TS 4.4): not implemented; exception split (`EvaluatorRefusedError` vs `EvaluatorInvalidOutputError`) leaves room. Revisit when real failures observed. Same policy applies to arch_01 stages 2-5.
-- **arxiv pricing of `MODEL_PRICING_PER_MTOK`**: hand-maintained, verified 2026-05-14. Update when Anthropic publishes new rates.
-- **Architecture-side cost tracking**: `BenchmarkResult.telemetry.total_cost_usd` is populated by each architecture (arch_00 always 0). The evaluator's cost lives separately on `EvaluatorScore.usage.cost_usd_estimated` — by design, since the evaluator is a separate run-time concern.
+- **ADR-0005 D5 TS 5.1 framing nitpick**: "structured handoff between stages" wording should be tightened to "context preservation via compact tool_result." Not blocking; cleanup commit.
+- **ADR documenting D4 TS 4.4 un-deferral**: stage 3's retry-with-feedback was introduced without a follow-up ADR. Either a short ADR-0007 or an addendum to ADR-0005.
+- **`PaperEntry.confidence` handling in stage 6 assembly**: deliberately not emitted by stage 3 per user direction ("confidence is further down the line"). Stage 6 will set a constant or simple heuristic for arch_01; user expected to weigh in when stage 6 lands.
 - **Citation lookup integration**: deferred for arch_01 (would double stage 1's tool surface). Revisit for arch_02 or as a later tool upgrade.
+- **`MODEL_PRICING_PER_MTOK`** (`src/papertrail/pricing.py`): hand-maintained, verified 2026-05-15. Update when Anthropic publishes new rates.
+- **Architecture-side cost tracking**: `BenchmarkResult.telemetry.total_cost_usd` populated by each architecture (arch_00 always 0). Evaluator's cost on `EvaluatorScore.usage.cost_usd_estimated` separately — by design.
+- **Provenance helpers in `BaselineArchitecture`** (move to harness): open since arch_00; stage 6 / orchestrator work would be a natural moment to do it.
+- **`apps/` legacy code deletion**: open; whenever convenient.
+
+**Recently resolved (this session):**
+
+- ADR-0006 — `Deliverable.papers` floor 8 → 4, decoupling arch_00's local guard from the schema.
+- D4 TS 4.4 retry-with-feedback — un-deferred for stage 3 (single retry on missing papers).
+- Pricing module extracted to `papertrail.pricing` (triage was the third caller).
+- Full cert guide (`CCA_Foundations_Guide.pdf`) read for the first time; session-start protocol now mandates this. See memory `[[reference-cert-guide-synopsis]]` + `[[feedback-concept-introduction]]`.
 
 ## Update protocol
 
