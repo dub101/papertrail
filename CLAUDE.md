@@ -18,7 +18,15 @@ After each component, **map it to a cert domain and task statement** (e.g., "Thi
 
 ## Cert guide — authoritative reference
 
-The official exam guide PDF lives at **`CCA_Foundations_Guide.pdf`** in the repo root. **Gitignored** — local-only, not for distribution. Read it (via the `Read` tool with `pages` parameter) whenever you need to verify a cert mapping rather than guessing.
+The official exam guide PDF lives at **`CCA_Foundations_Guide.pdf`** in the repo root. **Gitignored** — local-only, not for distribution. 40 pages.
+
+**Session start protocol — non-negotiable.** Before doing anything substantive in a new session, read all of the following:
+
+1. **The cert guide PDF in full.** `CCA_Foundations_Guide.pdf` at repo root, 40 pages. Read it via `Read` with `pages="1-20"` then `pages="21-40"` (20-page Read limit). The PDF is the authoritative source; do not skip it on the assumption that the synopsis is enough.
+2. **The cert guide synopsis** — `[[reference-cert-guide-synopsis]]` in memory. Auto-loads via MEMORY.md. It is a *quick-reference index* on top of the PDF, not a replacement.
+3. **The working-style feedback memories** — also auto-loaded via MEMORY.md. Confirm the rules are present in context before the first code or explanation lands: `[[feedback-teaching-pattern]]`, `[[feedback-code-snippet-summaries]]`, `[[feedback-concept-introduction]]`, `[[feedback-session-workflow]]`, `[[feedback-quiz-answer-parity]]`, `[[feedback-cost-awareness]]`, `[[feedback-dry-run-sentinels]]`.
+
+Treat the PDF as foundational reading every session, not as a "lookup when uncertain" resource. The 2026-05-15 incident — where I worked through the agentic-loop implementation without having read the PDF — is exactly what this protocol prevents.
 
 Domain titles and weights from the guide:
 
@@ -31,6 +39,8 @@ Domain titles and weights from the guide:
 | **D5** | Context Management & Reliability | 15% |
 
 D5 is **context engineering and multi-agent error propagation**, NOT "operations" or testing. Testing/CI strategy is *not* in the cert at all.
+
+PaperTrail is closest to **Scenario 3 (Multi-Agent Research System)** in the cert guide — that's the scenario PaperTrail's architectures exercise most directly, and Scenario 3's primary domains (D1, D2, D5) are the project's primary cert hooks.
 
 ## Stack
 
