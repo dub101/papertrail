@@ -28,12 +28,36 @@ from papertrail.architectures.arch_01_sequential.search import (
     SearchResult,
     SearchTelemetry,
 )
+from papertrail.architectures.arch_01_sequential.triage import (
+    INCLUDED_MAX,
+    INCLUDED_MIN,
+    TriageAgent,
+    TriageDecision,
+    TriageError,
+    TriageInsufficientQualityError,
+    TriageInvalidOutputError,
+    TriageRefusedError,
+    TriageResult,
+    TriageSelection,
+    TriageUsage,
+)
 
 __all__ = [
+    "INCLUDED_MAX",
+    "INCLUDED_MIN",
     "MAX_SEARCH_ITERATIONS",
     "MIN_PAPERS_TO_PROCEED",
     "SearchAgent",
     "SearchInsufficientResultsError",
     "SearchResult",
     "SearchTelemetry",
+    "TriageAgent",
+    "TriageDecision",
+    "TriageError",
+    "TriageInsufficientQualityError",
+    "TriageInvalidOutputError",
+    "TriageRefusedError",
+    "TriageResult",
+    "TriageSelection",
+    "TriageUsage",
 ]
