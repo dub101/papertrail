@@ -106,20 +106,21 @@ See memory `[[reference-session-continuity]]`.
 
 ## Current cursor
 
-**Session 3 wrapped.** Step ordering:
+**Session 4 bookmarked mid-Step-6.** Design complete, implementation pending. Step ordering:
 
 1. ✅ Project scaffolding — infrastructure (no cert mapping)
 2. ✅ Benchmark interface — `BenchmarkResult` pydantic + `Architecture` ABC (foundation for D4 TS 4.3, applies when wrapped as tool output)
 3. ✅ Shared tool layer — `arxiv_search` / `arxiv_fetch` / `format_citation` in `src/papertrail/tools/` (foundation for D2 TS 2.1; D2 TS 2.2 already hit by the 429-retry policy)
 4. ✅ arch_00 baseline — `src/papertrail/architectures/arch_00_baseline/` with `BaselineArchitecture`. Zero Claude tokens; one arxiv call; ≤3-bucket date partition; hybrid per-field policy (heuristic for `summary_about` + `summary_relation_to_topic` + `overall_summary`; distinct disclaimer constants for `summary_problem`/`approach`/`impact` + `era.narrative`); `confidence=0.5` uniform; `citation_*=None`. Raises `BaselineTooFewResultsError` if arxiv returns <8 usable papers. (No cert mapping — the floor.)
 5. ✅ Evaluator + benchmark runner + first real run — `src/papertrail/evaluator.py` (`Evaluator`, `DryRunEvaluator`, forced `tool_use` with `EvaluatorVerdict` schema, exact-tokens + estimated-$ usage tracking via `MODEL_PRICING_PER_MTOK`), `src/papertrail/prompts/evaluator_v1.md`, `src/papertrail/runner.py` (architecture registry + JSON persistence to `benchmark_runs/`), `scripts/run_benchmark.py` (CLI with `--dry-run` / `--no-evaluator` / `--verbose`). First real arch_00 + Sonnet run on "self-attention" → overall=0.18, confidence=0.92, per-dimension asymmetry between heuristic and disclaimer fields confirms the Phase-3 design. Cert mappings: **D4 TS 4.6** (independent review instance, calibrated confidence) and **D4 TS 4.3** (forced `tool_use` + JSON schema). See ADR-0004.
-6. ⬜ arch_01 sequential pipeline — first real LLM-driven architecture; D1 TS 1.1 (agentic loop), D1 TS 1.6 (task decomposition / prompt chaining) — **next session resumes here**
+6. 🟡 arch_01 sequential pipeline — **design wrapped in ADR-0005; implementation pending.** Six stages: search (agentic loop, D1 TS 1.1) → triage → per-paper synthesis (batched 5 papers/call) → era partition + narrative → executive summary → assembly. Cert hooks: D1 TS 1.1, D1 TS 1.6, D4 TS 4.3, D5 TS 5.1, D5 TS 5.3. **Resume by writing `src/papertrail/architectures/arch_01_sequential/search.py` (the SearchAgent for stage 1).** Branch `feature/arch-01-sequential` was used for ADR-0005; cut a fresh branch from `dev` next session for the implementation.
 
 **Open/deferred items:**
 
-- **Retry-with-error-feedback** (D4 TS 4.4): not implemented; exception split (`EvaluatorRefusedError` vs `EvaluatorInvalidOutputError`) leaves room. Revisit when real failures observed.
+- **Retry-with-error-feedback** (D4 TS 4.4): not implemented; exception split (`EvaluatorRefusedError` vs `EvaluatorInvalidOutputError`) leaves room. Revisit when real failures observed. Same policy applies to arch_01 stages 2-5.
 - **arxiv pricing of `MODEL_PRICING_PER_MTOK`**: hand-maintained, verified 2026-05-14. Update when Anthropic publishes new rates.
 - **Architecture-side cost tracking**: `BenchmarkResult.telemetry.total_cost_usd` is populated by each architecture (arch_00 always 0). The evaluator's cost lives separately on `EvaluatorScore.usage.cost_usd_estimated` — by design, since the evaluator is a separate run-time concern.
+- **Citation lookup integration**: deferred for arch_01 (would double stage 1's tool surface). Revisit for arch_02 or as a later tool upgrade.
 
 ## Update protocol
 
