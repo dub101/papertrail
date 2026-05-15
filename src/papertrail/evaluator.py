@@ -38,7 +38,14 @@ from typing import TYPE_CHECKING, Any, ClassVar, Final, cast
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from papertrail.benchmark import Deliverable
+from papertrail.pricing import MODEL_PRICING_PER_MTOK, compute_cost_usd
 from papertrail.prompts import load_prompt
+
+# Backwards-compatible alias for the historical private name used inside
+# this module. ``MODEL_PRICING_PER_MTOK`` is re-exported via ``__all__``
+# below so callers that still ``from papertrail.evaluator import ...`` it
+# keep working.
+_compute_cost_usd = compute_cost_usd
 
 if TYPE_CHECKING:
     from anthropic import AsyncAnthropic
@@ -62,45 +69,10 @@ SUMMARY_FIELDS: Final[tuple[str, str, str, str, str]] = (
     "summary_impact",
 )
 
-# ───── Per-model pricing for cost estimation ────────────────────────────
-#
-# Anthropic's messages API returns exact token counts (``Usage.input_tokens``,
-# ``Usage.output_tokens``) but does NOT return a per-call dollar amount.
-# Cost is computed client-side from these tokens times the per-million-token
-# rates below. Keep this table in sync with anthropic.com/pricing.
-#
-# Tuple shape: ``(input_per_mtok_usd, output_per_mtok_usd)``.
-# Verified 2026-05-14. Bump the date in the comment when updating rates.
-#
-# An unknown model falls back to ``0.0`` cost — a visibly-wrong zero against
-# a real model is a louder signal "the table is stale, fix it" than a crash.
-MODEL_PRICING_PER_MTOK: Final[dict[str, tuple[float, float]]] = {
-    "claude-sonnet-4-6": (3.0, 15.0),
-    "claude-haiku-4-5": (1.0, 5.0),
-    "claude-haiku-4-5-20251001": (1.0, 5.0),
-    # Sentinel — DryRunEvaluator stamps this model id, explicit zero makes
-    # the no-cost behavior a documented property rather than a fallback.
-    "dry-run-no-llm": (0.0, 0.0),
-}
-
-
-def _compute_cost_usd(model: str, input_tokens: int, output_tokens: int) -> float:
-    """Estimate USD cost from token counts using ``MODEL_PRICING_PER_MTOK``.
-
-    The result is an *estimate*: ground truth lives on Anthropic's billing
-    side, this function does the per-million-token arithmetic with the
-    rates we have locally. Use ``input_tokens`` / ``output_tokens`` (exact,
-    from the API) when you need authoritative numbers.
-    """
-    pricing = MODEL_PRICING_PER_MTOK.get(model)
-    if pricing is None:
-        return 0.0
-    input_rate, output_rate = pricing
-    return (
-        (input_tokens / 1_000_000) * input_rate
-        + (output_tokens / 1_000_000) * output_rate
-    )
-
+# Per-model pricing has moved to ``papertrail.pricing`` -- a third caller
+# (arch_01 triage stage) appeared, which per the codebase rule triggers
+# extraction from "duplicated in two places" to "shared module."
+# Re-exported below for any importer that still references the old names.
 
 class _StrictModel(BaseModel):
     """Local strict base — same shape as ``benchmark._StrictModel``.

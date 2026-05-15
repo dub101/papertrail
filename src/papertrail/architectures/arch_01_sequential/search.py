@@ -42,6 +42,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar, Final, cast
 
 from papertrail.benchmark import ErrorRecord
+from papertrail.pricing import compute_cost_usd
 from papertrail.prompts import load_prompt
 from papertrail.tools.arxiv import ArxivPaper, arxiv_search
 
@@ -72,37 +73,10 @@ MIN_PAPERS_TO_PROCEED: Final[int] = 4
 # reasoning); 2048 is generous headroom and matches what the Evaluator uses.
 _MAX_TOKENS_PER_TURN: Final[int] = 2048
 
-# Pricing dict is duplicated from ``papertrail.evaluator`` deliberately —
-# two callers today (evaluator + this module). The codebase rule (see
-# evaluator.py docstring on ``_StrictModel`` duplication) is: extract to a
-# shared module once a third caller appears. Arch_01 stages 2-5 will be
-# that third caller — at that point ``MODEL_PRICING_PER_MTOK`` and
-# ``_compute_cost_usd`` move to ``papertrail/pricing.py``. Until then,
-# duplication is cheaper than premature extraction.
-#
-# Tuple shape: ``(input_per_mtok_usd, output_per_mtok_usd)``.
-# Verified 2026-05-14. Bump the date in the comment when updating rates.
-_MODEL_PRICING_PER_MTOK: Final[dict[str, tuple[float, float]]] = {
-    "claude-sonnet-4-6": (3.0, 15.0),
-    "claude-haiku-4-5": (1.0, 5.0),
-    "claude-haiku-4-5-20251001": (1.0, 5.0),
-}
-
-
-def _compute_cost_usd(model: str, input_tokens: int, output_tokens: int) -> float:
-    """Estimate USD cost from token counts using ``_MODEL_PRICING_PER_MTOK``.
-
-    Unknown models fall back to ``0.0`` — a visibly-wrong zero against a real
-    model is a louder "table is stale, fix it" signal than a silent miss.
-    """
-    pricing = _MODEL_PRICING_PER_MTOK.get(model)
-    if pricing is None:
-        return 0.0
-    input_rate, output_rate = pricing
-    return (
-        (input_tokens / 1_000_000) * input_rate
-        + (output_tokens / 1_000_000) * output_rate
-    )
+# Per-model pricing lives in ``papertrail.pricing`` — triage made it the
+# third caller, completing the "duplicate twice, extract on the third"
+# move documented in the prior version of this comment. ``compute_cost_usd``
+# is imported above.
 
 
 # ───── Tool definition exposed to the model ─────────────────────────────
@@ -418,7 +392,7 @@ class SearchAgent:
                 queries_issued=tuple(queries_issued),
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
-                cost_usd=_compute_cost_usd(self._model, input_tokens, output_tokens),
+                cost_usd=compute_cost_usd(self._model, input_tokens, output_tokens),
                 final_stop_reason=final_stop_reason,
                 recovered=recovered,
             ),
