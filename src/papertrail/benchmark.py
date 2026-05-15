@@ -165,7 +165,12 @@ class Deliverable(_StrictModel):
     topic: str = Field(min_length=1)
     overall_summary: str = Field(min_length=1, description="~150-200 word executive summary")
     # 8-12 papers per the project brief; pydantic enforces the band.
-    papers: list[PaperEntry] = Field(min_length=8, max_length=12)
+    # Lower bound loosened from 8 to 4 by ADR-0006. The 4 is the smallest
+    # count at which a meaningful era partition + per-paper synthesis +
+    # executive summary can still be produced. arch_00 keeps its own strict
+    # 8-floor via BaselineTooFewResultsError; it is no longer the schema's
+    # contract.
+    papers: list[PaperEntry] = Field(min_length=4, max_length=12)
     timeline: list[TimelineEra] = Field(min_length=1)
 
     @model_validator(mode="after")
