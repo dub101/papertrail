@@ -20,6 +20,18 @@ Cert mappings (full architecture):
 
 from __future__ import annotations
 
+from papertrail.architectures.arch_01_sequential.era_partition import (
+    ERAS_MAX,
+    ERAS_MIN,
+    EraEntry,
+    EraPartition,
+    EraPartitionAgent,
+    EraPartitionError,
+    EraPartitionInvalidOutputError,
+    EraPartitionRefusedError,
+    EraPartitionResult,
+    EraPartitionUsage,
+)
 from papertrail.architectures.arch_01_sequential.search import (
     MAX_SEARCH_ITERATIONS,
     MIN_PAPERS_TO_PROCEED,
@@ -53,11 +65,21 @@ from papertrail.architectures.arch_01_sequential.triage import (
 )
 
 __all__ = [
+    "ERAS_MAX",
+    "ERAS_MIN",
     "INCLUDED_MAX",
     "INCLUDED_MIN",
     "MAX_SEARCH_ITERATIONS",
     "MIN_PAPERS_TO_PROCEED",
     "TARGET_BATCH_SIZE",
+    "EraEntry",
+    "EraPartition",
+    "EraPartitionAgent",
+    "EraPartitionError",
+    "EraPartitionInvalidOutputError",
+    "EraPartitionRefusedError",
+    "EraPartitionResult",
+    "EraPartitionUsage",
     "PaperSynthesis",
     "SearchAgent",
     "SearchInsufficientResultsError",
