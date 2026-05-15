@@ -152,6 +152,35 @@ def test_papertrail_result_round_trips_through_json(
     assert restored == original
 
 
+# ───── Deliverable size floor (ADR-0006) ────────────────────────────────
+
+
+def test_deliverable_rejects_fewer_than_four_papers() -> None:
+    """ADR-0006 sets the lower bound at 4 papers — 3 must raise."""
+    ids = _arxiv_ids(3)
+    papers = [_paper(ids[i], era_id="era1") for i in range(3)]
+    with pytest.raises(ValidationError, match="at least 4 items"):
+        Deliverable(
+            topic="t",
+            overall_summary="s",
+            papers=papers,
+            timeline=[_era("era1", paper_ids=ids)],
+        )
+
+
+def test_deliverable_accepts_exactly_four_papers() -> None:
+    """The 4-paper boundary is inclusive — exactly 4 must construct cleanly."""
+    ids = _arxiv_ids(4)
+    papers = [_paper(ids[i], era_id="era1") for i in range(4)]
+    d = Deliverable(
+        topic="thin-data topic",
+        overall_summary="A topic with only four high-signal papers.",
+        papers=papers,
+        timeline=[_era("era1", paper_ids=ids)],
+    )
+    assert len(d.papers) == 4
+
+
 # ───── Cross-list integrity on Deliverable ──────────────────────────────
 
 
@@ -276,19 +305,6 @@ def test_citation_both_set_accepted() -> None:
     p = _paper("1706.03762", "era1", citation_count=100000, citation_source="openalex")
     assert p.citation_count == 100000
     assert p.citation_source == "openalex"
-
-
-def test_paper_count_below_8_rejected() -> None:
-    """Deliverable rejects fewer than 8 papers."""
-    ids = _arxiv_ids(7)
-    papers = [_paper(ids[i], era_id="era1") for i in range(7)]
-    with pytest.raises(ValidationError):
-        Deliverable(
-            topic="t",
-            overall_summary="s",
-            papers=papers,
-            timeline=[_era("era1", paper_ids=ids)],
-        )
 
 
 def test_paper_count_above_12_rejected() -> None:

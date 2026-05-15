@@ -1,8 +1,9 @@
 # 0005 — arch_01 design: sequential pipeline with agentic-loop search
 
-- **Status:** Accepted (design); implementation pending
+- **Status:** Accepted (design); implementation in progress
 - **Date:** 2026-05-14
 - **Deciders:** dub101
+- **Updated by:** [ADR-0006](0006-deliverable-papers-floor.md) — `Deliverable.papers` floor loosened 8 → 4; `MIN_PAPERS_TO_PROCEED` in this ADR is correspondingly 4, not 8.
 
 ## Context
 
