@@ -53,7 +53,7 @@ def _era(era_id: str, paper_ids: list[str], *, start: int = 2017, end: int | Non
     )
 
 
-def _synth(arxiv_id: str) -> PaperSynthesis:
+def _synth(arxiv_id: str, *, confidence: float = 0.85) -> PaperSynthesis:
     return PaperSynthesis(
         arxiv_id=arxiv_id,
         summary_about=f"What {arxiv_id} is about.",
@@ -61,6 +61,7 @@ def _synth(arxiv_id: str) -> PaperSynthesis:
         summary_problem=f"The problem {arxiv_id} addresses.",
         summary_approach=f"The approach {arxiv_id} takes.",
         summary_impact=f"The impact of {arxiv_id}.",
+        confidence=confidence,
     )
 
 

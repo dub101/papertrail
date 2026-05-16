@@ -118,16 +118,25 @@ class _StrictModel(BaseModel):
 
 
 class PaperSynthesis(_StrictModel):
-    """One paper's five-field synthesis, with an optional notes channel.
+    """One paper's five-field synthesis, plus a per-paper confidence and
+    an optional notes channel.
 
     Field constraints mirror ``PaperEntry``'s requirements (``min_length=1``)
     so a successful synthesis flows directly into the deliverable. The
     upper bound is generous but bounded — runaway paragraphs are caught
     before they reach JSON persistence.
 
+    ``confidence`` is the model's self-assessment of how well this
+    per-paper synthesis captures the contribution given the abstract it
+    received. Stage 6 propagates it directly into ``PaperEntry.confidence``
+    (replacing the earlier heuristic). Disclaimer-filled syntheses (stage
+    3 failed for this paper) carry ``confidence=0.0`` as a visible
+    "code-emitted floor case" signal — the model-emitted range is then
+    the meaningful one.
+
     ``notes`` is the user-requested "channel for surprises": optional,
     bounded, telemetry-bound. Not part of ``PaperEntry``; routed to
-    ``Telemetry.trace`` by the orchestrator.
+    ``Telemetry.synthesis_notes`` by the orchestrator.
     """
 
     arxiv_id: str = Field(pattern=ARXIV_ID_RE)
@@ -136,6 +145,7 @@ class PaperSynthesis(_StrictModel):
     summary_problem: str = Field(min_length=1, max_length=_FIELD_MAX_CHARS)
     summary_approach: str = Field(min_length=1, max_length=_FIELD_MAX_CHARS)
     summary_impact: str = Field(min_length=1, max_length=_FIELD_MAX_CHARS)
+    confidence: float = Field(ge=0.0, le=1.0)
     notes: str | None = Field(default=None, max_length=_NOTES_MAX_CHARS)
 
 
@@ -608,6 +618,13 @@ class SynthesisAgent:
         Distinct text per field so the Evaluator's per-dimension scoring
         can attribute the floor to "stage 3 failed on this paper" rather
         than collapsing five dimensions into one blanket low score.
+
+        ``confidence=0.0`` is deliberate: the model never wrote a real
+        synthesis for this paper, so an "honest" model-emitted confidence
+        is unavailable. Setting it to the absolute floor makes the
+        disclaimer case loud in downstream tooling — any
+        ``PaperEntry.confidence == 0.0`` is a code-emitted floor entry,
+        not a model judgement.
         """
         return PaperSynthesis(
             arxiv_id=arxiv_id,
@@ -616,6 +633,7 @@ class SynthesisAgent:
             summary_problem=_SYNTH_FAIL_PROBLEM,
             summary_approach=_SYNTH_FAIL_APPROACH,
             summary_impact=_SYNTH_FAIL_IMPACT,
+            confidence=0.0,
             notes=None,
         )
 

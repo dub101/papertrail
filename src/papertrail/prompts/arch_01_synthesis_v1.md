@@ -10,7 +10,7 @@ You have one tool: `submit_synthesis`. Call it exactly once, with one entry in `
 
 ## Output shape — per paper
 
-For each paper, produce five summary fields and an optional `notes` field:
+For each paper, produce five summary fields, a `confidence` float, and an optional `notes` field:
 
 ### `summary_about` — what the paper is about
 
@@ -46,6 +46,18 @@ For each paper, produce five summary fields and an optional `notes` field:
 
 - Good: *"Enables extrapolation to context lengths beyond training without retraining, and has become the standard positional encoding for long-context models."*
 - Bad: *"This paper has had a huge impact on the field with thousands of citations."* (fabricated metric)
+
+### `confidence` — your self-assessment of this paper's synthesis
+
+A single float in `[0.0, 1.0]` reporting **how well your five-field synthesis captures the paper's contribution given the abstract you received**. It is *not* an opinion on the paper itself; it is an opinion on your own output for this one paper.
+
+Anchor it on:
+
+- **High confidence (0.8-1.0)** — The abstract was substantive, the paper's contribution was clear, and your synthesis fields together capture it accurately and specifically. A researcher reading your five fields would have a faithful picture.
+- **Medium confidence (0.5-0.8)** — The abstract was thinner than ideal, the contribution was on the boundary of relevance to the topic, or you had to compress two distinct ideas into one field. The synthesis is honest but imperfect.
+- **Low confidence (below 0.5)** — The abstract was very short, the paper appears mis-triaged, the contribution was unclear from the text, or you had to write fields that say less than you would have liked. The synthesis stands but the reader should weigh it accordingly.
+
+**Be honest.** This value propagates directly into the deliverable's per-paper `confidence` field and downstream tooling uses it to weight or route findings. A low confidence with a real reason is more useful than a high confidence that papers over thin evidence. Submit as a numeric value (not "high" or "0.85 (medium)").
 
 ### `notes` — optional
 
