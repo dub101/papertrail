@@ -32,6 +32,15 @@ from papertrail.architectures.arch_01_sequential.era_partition import (
     EraPartitionResult,
     EraPartitionUsage,
 )
+from papertrail.architectures.arch_01_sequential.executive_summary import (
+    ExecutiveSummary,
+    ExecutiveSummaryAgent,
+    ExecutiveSummaryError,
+    ExecutiveSummaryInvalidOutputError,
+    ExecutiveSummaryRefusedError,
+    ExecutiveSummaryResult,
+    ExecutiveSummaryUsage,
+)
 from papertrail.architectures.arch_01_sequential.search import (
     MAX_SEARCH_ITERATIONS,
     MIN_PAPERS_TO_PROCEED,
@@ -80,6 +89,13 @@ __all__ = [
     "EraPartitionRefusedError",
     "EraPartitionResult",
     "EraPartitionUsage",
+    "ExecutiveSummary",
+    "ExecutiveSummaryAgent",
+    "ExecutiveSummaryError",
+    "ExecutiveSummaryInvalidOutputError",
+    "ExecutiveSummaryRefusedError",
+    "ExecutiveSummaryResult",
+    "ExecutiveSummaryUsage",
     "PaperSynthesis",
     "SearchAgent",
     "SearchInsufficientResultsError",
