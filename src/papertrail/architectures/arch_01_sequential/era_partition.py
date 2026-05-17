@@ -74,10 +74,12 @@ ERAS_MAX: Final[int] = 4
 
 # Narrative character bounds (a soft 80-120 word target, ~500-700 chars
 # in English prose). 200 is generous on the low end to permit terse
-# eras; 900 is generous on the high end to permit verbose ones without
-# tolerating runaway paragraphs.
+# eras; 1500 is generous on the high end to permit verbose ones without
+# tolerating runaway paragraphs. The first real run on 2026-05-17 hit
+# the previous 900 cap with a substantive narrative just slightly over,
+# so 1500 absorbs that variance.
 _NARRATIVE_MIN_CHARS: Final[int] = 200
-_NARRATIVE_MAX_CHARS: Final[int] = 900
+_NARRATIVE_MAX_CHARS: Final[int] = 1500
 
 # Year-range bounds. arXiv started in 1991; we allow 1990 as a margin.
 # 2100 is a future-proofing ceiling that will only ever bite a typo.
