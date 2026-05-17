@@ -31,6 +31,12 @@ def _xml(name: str) -> str:
     return (FIXTURES / name).read_text()
 
 
+# Pacing bypass fixture lives in ``tests/tools/conftest.py`` so it
+# applies to ``test_arxiv_fetch.py`` and ``test_surface_smoke.py`` too.
+# Tests that inspect specific sleeps re-monkeypatch ``asyncio.sleep``
+# inside the test body; the local override wins over the conftest one.
+
+
 # ───── Happy path ───────────────────────────────────────────────────────
 
 
@@ -137,27 +143,34 @@ async def test_max_results_outside_band_is_rejected(bad_value: int) -> None:
 # ───── 429 retry behaviour (the protocol-level guarantee) ───────────────
 
 
-async def test_429_retries_exactly_once_then_succeeds(httpx_mock: HTTPXMock) -> None:
-    """The arXiv protocol: 429 -> wait 3s -> retry -> success."""
+async def test_429_then_success_uses_one_retry(httpx_mock: HTTPXMock) -> None:
+    """One 429 followed by success: two requests sent total."""
     httpx_mock.add_response(status_code=429)
     httpx_mock.add_response(text=_xml("arxiv_search_sample.xml"))
 
     papers = await arxiv_search("attention", max_results=2)
     assert len(papers) == 2
-    # Two requests were sent: the initial that 429'd, and the retry that
-    # succeeded. ``pytest-httpx`` exposes both via ``get_requests``.
     assert len(httpx_mock.get_requests()) == 2
 
 
-async def test_double_429_raises_status_error(httpx_mock: HTTPXMock) -> None:
-    """If the retry also gets 429, we re-raise — no second retry."""
-    httpx_mock.add_response(status_code=429)
-    httpx_mock.add_response(status_code=429)
+async def test_four_consecutive_429s_raise(
+    httpx_mock: HTTPXMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """If all 4 attempts (initial + 3 retries) get 429, re-raise."""
+
+    # Monkeypatch sleep so the test doesn't wait the real 65 seconds.
+    async def fake_sleep(seconds: float) -> None:
+        _ = seconds
+
+    monkeypatch.setattr("papertrail.tools.arxiv.asyncio.sleep", fake_sleep)
+
+    for _ in range(4):
+        httpx_mock.add_response(status_code=429)
 
     with pytest.raises(httpx.HTTPStatusError):
         await arxiv_search("attention", max_results=2)
-    # Exactly two attempts, not three.
-    assert len(httpx_mock.get_requests()) == 2
+    # Exactly 4 attempts (initial + the three backoff retries), not 5.
+    assert len(httpx_mock.get_requests()) == 4
 
 
 async def test_500_does_not_retry(httpx_mock: HTTPXMock) -> None:
@@ -171,26 +184,60 @@ async def test_500_does_not_retry(httpx_mock: HTTPXMock) -> None:
     assert len(httpx_mock.get_requests()) == 1
 
 
-async def test_429_uses_arxiv_documented_wait(
+async def test_429_uses_exponential_backoff_schedule(
     httpx_mock: HTTPXMock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The wait between the two attempts is exactly the constant ``arxiv``
-    documents (3.0s). We assert by monkeypatching ``asyncio.sleep`` inside
-    the module under test so the test runs fast and we can inspect what
-    wait was requested."""
-    from papertrail.tools.arxiv import RATE_LIMIT_WAIT_SECONDS
+    """When all 4 attempts 429, the backoff sleeps match the documented
+    schedule (5s, 15s, 45s). Pacing is monkeypatched to a no-op so the
+    assertion captures only backoff waits — pacing has its own test."""
+    from papertrail.tools.arxiv import _RATE_LIMIT_BACKOFF_SECONDS
 
     sleeps: list[float] = []
 
     async def fake_sleep(seconds: float) -> None:
         sleeps.append(seconds)
 
-    # String form of setattr lets mypy stay strict (no need to reach inside
-    # the module for ``asyncio``).
-    monkeypatch.setattr("papertrail.tools.arxiv.asyncio.sleep", fake_sleep)
+    async def fake_pace() -> None:
+        return None
 
-    httpx_mock.add_response(status_code=429)
+    monkeypatch.setattr("papertrail.tools.arxiv.asyncio.sleep", fake_sleep)
+    monkeypatch.setattr("papertrail.tools.arxiv._pace_request", fake_pace)
+
+    for _ in range(4):
+        httpx_mock.add_response(status_code=429)
+
+    with pytest.raises(httpx.HTTPStatusError):
+        await arxiv_search("attention", max_results=2)
+    assert sleeps == list(_RATE_LIMIT_BACKOFF_SECONDS)
+
+
+async def test_inter_request_pacing_sleeps_at_least_min_seconds(
+    httpx_mock: HTTPXMock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two consecutive arxiv_search calls sleep at least
+    MIN_INTER_REQUEST_SECONDS between them (subject to elapsed time
+    being smaller than the gap)."""
+    from papertrail.tools.arxiv import MIN_INTER_REQUEST_SECONDS
+
+    sleeps: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr("papertrail.tools.arxiv.asyncio.sleep", fake_sleep)
+    # Two successful responses, back to back.
+    httpx_mock.add_response(text=_xml("arxiv_search_sample.xml"))
     httpx_mock.add_response(text=_xml("arxiv_search_sample.xml"))
 
     await arxiv_search("attention", max_results=2)
-    assert sleeps == [RATE_LIMIT_WAIT_SECONDS]
+    await arxiv_search("attention", max_results=2)
+
+    # First call: pacing sees a huge elapsed (last=0.0), no sleep needed.
+    # Second call: pacing sees a tiny elapsed (just after first GET),
+    # sleeps roughly MIN_INTER_REQUEST_SECONDS.
+    assert len(sleeps) == 1
+    # Tolerance accounts for the parse + httpx setup time between calls
+    # (tens of ms in CI / a few ms locally). The sleep is computed as
+    # MIN - elapsed, so a slightly faster path produces a slightly
+    # smaller sleep but never more than MIN.
+    assert MIN_INTER_REQUEST_SECONDS - 0.5 < sleeps[0] <= MIN_INTER_REQUEST_SECONDS

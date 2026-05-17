@@ -44,9 +44,10 @@ explicit error semantics at the boundary.
 from __future__ import annotations
 
 import asyncio
+import time
 import xml.etree.ElementTree as ET
 from datetime import datetime
-from typing import Literal
+from typing import Final, Literal
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
@@ -62,7 +63,27 @@ USER_AGENT = "papertrail/0.1 (+https://github.com/dub101/papertrail)"
 
 # arXiv asks clients to wait 3 seconds after a 429. This is *their* number,
 # not ours — encoded as a named constant so it's findable from the README.
-RATE_LIMIT_WAIT_SECONDS = 3.0
+# Exponential backoff schedule for arXiv's 429 responses. Each entry is
+# the wait *before* the next retry attempt. The initial request is
+# attempted unconditionally, then 429s trigger waits in order. Total
+# worst case: 5 + 15 + 45 = 65 seconds across 4 attempts. arXiv's
+# documented polite-usage cadence is 3s between requests; the longer
+# tail catches the bursty / hard-limited cases the agentic loop trips.
+_RATE_LIMIT_BACKOFF_SECONDS: Final[tuple[float, ...]] = (5.0, 15.0, 45.0)
+
+# Minimum gap between consecutive arxiv requests from this process. arXiv
+# documents 3s; we use 4s for margin. Enforced by ``_pace_request`` below,
+# which sleeps the remaining gap before each GET. Not thread/async-safe
+# for parallel callers — the project's pattern is one in-flight arxiv
+# call at a time across all agents (agentic loop is sequential; synthesis
+# stages don't call arxiv), so a lock would be overhead for no benefit.
+MIN_INTER_REQUEST_SECONDS: Final[float] = 4.0
+
+# Module-level state: monotonic timestamp of the most recent arxiv
+# request. ``_pace_request`` reads and updates this. Reset to 0.0 in
+# tests via an autouse fixture so test ordering doesn't leak pacing
+# state from one test into the next.
+_last_request_monotonic: float = 0.0
 
 # Whole-request timeout. Generous because arXiv occasionally pauses for
 # several seconds under load. A network failure should surface as
@@ -214,27 +235,53 @@ def _parse_entry(entry: ET.Element) -> ArxivPaper:
     )
 
 
+async def _pace_request() -> None:
+    """Sleep just long enough to honor ``MIN_INTER_REQUEST_SECONDS``.
+
+    Reads the monotonic timestamp of the last completed request and
+    sleeps the remaining gap if less than the minimum. Updates the
+    timestamp to "now" after sleeping (so the next caller sees the
+    correct gap). First call in a process has elapsed >= process
+    uptime and skips the sleep.
+    """
+    global _last_request_monotonic
+    now = time.monotonic()
+    elapsed = now - _last_request_monotonic
+    remaining = MIN_INTER_REQUEST_SECONDS - elapsed
+    if remaining > 0:
+        await asyncio.sleep(remaining)
+    _last_request_monotonic = time.monotonic()
+
+
 async def _get_with_arxiv_retry(
     client: httpx.AsyncClient, params: dict[str, str | int]
 ) -> httpx.Response:
-    """Single GET against the arXiv API with the 429-only retry.
+    """GET against the arXiv API with pacing + exponential backoff on 429.
 
     Encodes arXiv's protocol-level politeness:
-      * 429 once  -> wait ``RATE_LIMIT_WAIT_SECONDS``, retry exactly once.
-      * 429 twice -> raise ``HTTPStatusError`` (caller decides).
-      * Any other 4xx/5xx -> raise immediately, no retry.
-      * Network errors -> propagate (``httpx.HTTPError`` family).
+      * Every GET is preceded by ``_pace_request`` so consecutive calls
+        from the same process honor arXiv's documented per-IP cadence
+        (one request every ~3 seconds; we use 4 for margin).
+      * Initial attempt unconditional (after pacing).
+      * 429 triggers a wait from ``_RATE_LIMIT_BACKOFF_SECONDS``
+        (5s, 15s, 45s) before each successive retry — up to 4 attempts
+        total, worst-case ~65s of waits.
+      * Non-429 response (success, 4xx, 5xx) returns or raises on the
+        spot. The retry policy is 429-only by design — arXiv documents
+        429 as "back off"; other statuses mean something different.
+      * Network errors (``httpx.HTTPError`` family) propagate.
 
-    The architecture layer is responsible for generic resilience (retry on
-    5xx, circuit breakers, etc). This function only knows arXiv-specific
-    rules.
+    The architecture layer is responsible for generic resilience above
+    this (retry on 5xx, circuit breakers, etc.); this function only
+    knows arXiv-specific rules.
     """
+    await _pace_request()
     response = await client.get(ARXIV_API_BASE, params=params)
-    if response.status_code == 429:
-        # One polite wait, then one more try. If that also returns 429 we
-        # fall through to ``raise_for_status`` and the architecture handles
-        # the failure on its own terms.
-        await asyncio.sleep(RATE_LIMIT_WAIT_SECONDS)
+    for wait in _RATE_LIMIT_BACKOFF_SECONDS:
+        if response.status_code != 429:
+            break
+        await asyncio.sleep(wait)
+        await _pace_request()
         response = await client.get(ARXIV_API_BASE, params=params)
     response.raise_for_status()
     return response
