@@ -298,7 +298,7 @@ async def test_summarize_raises_on_summary_too_short() -> None:
 
 async def test_summarize_raises_on_summary_too_long() -> None:
     eras, syntheses = _two_eras_eight_papers()
-    too_long = "word " * 400  # ~2000 chars, exceeds 1500 cap
+    too_long = "word " * 600  # 3000 chars, exceeds 2500 cap
     response = _fake_message([_tool_use_block(_summary_dict(too_long))])
     agent = ExecutiveSummaryAgent(_fake_client(response))
 
