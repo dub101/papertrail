@@ -63,12 +63,16 @@ if TYPE_CHECKING:
 
 
 # Summary character bounds. 150-200 words at ~5-6 chars/word + spacing
-# is roughly 750-1200 chars; 600-1500 gives generous headroom on both
+# is roughly 750-1200 chars; 600-2500 gives generous headroom on both
 # sides so the model isn't rejected for landing slightly outside the
 # target word count. The soft 150-200 word target lives in the prompt;
 # the schema bounds are the structural guard.
+# The first real run on 2026-05-17 hit the previous 1500 cap with a
+# substantive 4-era summary that was just slightly over — bumped to
+# 2500 (roughly 350-400 words) to absorb that variance without
+# permitting essay-length output.
 _SUMMARY_MIN_CHARS: Final[int] = 600
-_SUMMARY_MAX_CHARS: Final[int] = 1500
+_SUMMARY_MAX_CHARS: Final[int] = 2500
 
 # Output budget. ~1500 chars of summary plus a confidence float plus
 # the tool_use envelope is ~600 tokens; 2048 is comfortable headroom.
