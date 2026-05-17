@@ -116,40 +116,62 @@ See memory `[[reference-session-continuity]]`.
 
 ## Current cursor
 
-**Session 5 in progress — arch_01 stages 1-4 shipped; stage 5 (executive summary) is next.** Step ordering:
+**arch_01 complete (all 6 stages + runner wired); first real run pending arxiv rate-limit cooldown.** Resume tomorrow with a single command; see "Next session" below. Step ordering:
 
 1. ✅ Project scaffolding — infrastructure (no cert mapping)
 2. ✅ Benchmark interface — `BenchmarkResult` pydantic + `Architecture` ABC (foundation for D4 TS 4.3, applies when wrapped as tool output)
-3. ✅ Shared tool layer — `arxiv_search` / `arxiv_fetch` / `format_citation` in `src/papertrail/tools/` (foundation for D2 TS 2.1; D2 TS 2.2 already hit by the 429-retry policy)
-4. ✅ arch_00 baseline — `src/papertrail/architectures/arch_00_baseline/` with `BaselineArchitecture`. Zero Claude tokens; one arxiv call; ≤3-bucket date partition; hybrid per-field policy; `confidence=0.5` uniform; `citation_*=None`. Raises `BaselineTooFewResultsError` if arxiv returns <8 usable papers (arch_00's own strict floor, decoupled from the schema by ADR-0006). (No cert mapping — the floor.)
-5. ✅ Evaluator + benchmark runner + first real run — `src/papertrail/evaluator.py`, `src/papertrail/prompts/evaluator_v1.md`, `src/papertrail/runner.py`, `scripts/run_benchmark.py`. First real arch_00 + Sonnet run on "self-attention" → overall=0.18. Cert: **D4 TS 4.6**, **D4 TS 4.3**. See ADR-0004.
-6. 🟡 arch_01 sequential pipeline — stages 1-3 shipped on `dev`, stages 4-6 pending. Cert hooks across the architecture: D1 TS 1.1, D1 TS 1.6, D4 TS 4.3, D4 TS 4.4, D5 TS 5.1, D5 TS 5.3, D5 TS 5.6.
-   - ✅ **Stage 1 — `SearchAgent`** (`src/papertrail/architectures/arch_01_sequential/search.py`). Agentic loop over `arxiv_search`; compact tool_result hand-back; partial-results recovery via `ErrorRecord(recovered=True)` when `stop_reason != "end_turn"` but ≥ `MIN_PAPERS_TO_PROCEED=4` papers collected. Cert: **D1 TS 1.1**, **D5 TS 5.1**, **D5 TS 5.3**. See ADR-0006 (schema floor relaxation 8 → 4).
-   - ✅ **Stage 2 — `TriageAgent`** (`src/papertrail/architectures/arch_01_sequential/triage.py`). Single forced `tool_use` call producing one decision per candidate (included|rejected + reason). Four exception classes for fail-loud classification; `TriageInsufficientQualityError` distinct from `TriageInvalidOutputError`. Full audit trail via `CandidateRecord` flowing to `Telemetry.candidates`. Cert: **D4 TS 4.3**, **D4 TS 4.1**, **D5 TS 5.6**.
-   - ✅ **Stage 3 — `SynthesisAgent`** (`src/papertrail/architectures/arch_01_sequential/synthesis.py`). Parallel batched synthesis via `asyncio.gather` + `_safe_batch` wrapper. Balanced batch sizes near `TARGET_BATCH_SIZE=5`. One retry round on missing papers; permanent misses get distinct per-dimension disclaimer text + `ErrorRecord(recovered=True)`. Hard-fail on zero-success. Cert: **D1 TS 1.6**, **D4 TS 4.3**, **D4 TS 4.4** (first introduction; un-defers the policy left open in ADR-0005), **D5 TS 5.1**, **D5 TS 5.3**.
-   - ✅ **Stage 4 — `EraPartitionAgent`** (`src/papertrail/architectures/arch_01_sequential/era_partition.py`). Single forced `tool_use` call partitioning the synthesised papers into **2-4 content-driven eras** (`ERAS_MIN=2`, `ERAS_MAX=4` per user direction). `EraEntry` schema: lowercase-slug `era_id`, year-int range (overlap across eras allowed; end-year nullable for the frontier era), narrative bounded to 200-900 chars (encodes the soft 80-120 word target). Four cross-field invariants enforced post-parse: no fabricated paper_ids, **paper in exactly one era** (Option A — schema unchanged), unique era_ids, year ordering. Three exceptions: `EraPartitionError` base, `EraPartitionRefusedError`, `EraPartitionInvalidOutputError`. Cert: **D4 TS 4.3**, **D1 TS 1.6** (first cross-paper integration pass), **D5 TS 5.6** (provenance via paper_ids audit trail; narrative speaks at concept level, no paper-name-dropping).
-   - ⬜ **Stage 5 — Executive summary.** **Resume here.** Single forced `tool_use` call producing `Deliverable.overall_summary` (~150-200 words). Input: topic + era partition + per-paper syntheses. Re-use of the forced-tool pattern (no new theory section needed per `[[feedback-concept-introduction]]`); short "what's new vs. prior" callout suffices.
-   - ⬜ **Stage 6 — Assembly + `SequentialArchitecture` orchestrator.** Pure-code stage that wires all six stages into one `Architecture.run(topic) -> BenchmarkResult`. Includes provenance injection, telemetry aggregation, year-int → `date(...)` lifting for era ranges, and confidence default (open item below).
-- Auxiliary: `src/papertrail/pricing.py` extracted in stage 2's session as the third caller appeared (Evaluator + SearchAgent + TriageAgent); `compute_cost_usd` + `MODEL_PRICING_PER_MTOK` now live there.
-- Test count: **221 passing**, ruff + mypy strict clean across all of `src/`. arch_00 + arch_01 stages 1-3 covered.
+3. ✅ Shared tool layer — `arxiv_search` / `arxiv_fetch` / `format_citation` in `src/papertrail/tools/`. **arxiv now respects a 4 s inter-request pace + 5/15/45 s exponential backoff on 429** (`papertrail.tools.arxiv._pace_request` + `_RATE_LIMIT_BACKOFF_SECONDS`). Cert: D2 TS 2.1, D2 TS 2.2 (transient-retryable error handling).
+4. ✅ arch_00 baseline — `src/papertrail/architectures/arch_00_baseline/`; zero Claude tokens; provenance now imports from shared `papertrail.provenance`.
+5. ✅ Evaluator + benchmark runner + first real run — first real arch_00 + Sonnet run on "self-attention" → overall=0.18. Cert: **D4 TS 4.6**, **D4 TS 4.3**. See ADR-0004.
+6. ✅ **arch_01 sequential pipeline — 6/6 stages merged on `dev`.** Cert hooks across the architecture: D1 TS 1.1, D1 TS 1.4, D1 TS 1.6, D4 TS 4.1, D4 TS 4.3, D4 TS 4.4, D5 TS 5.1, D5 TS 5.3, D5 TS 5.6.
+   - ✅ **Stage 1 — `SearchAgent`** (agentic loop over `arxiv_search`; compact tool_result; partial-results recovery; `MIN_PAPERS_TO_PROCEED=4`). Cert: D1 TS 1.1, D5 TS 5.1, D5 TS 5.3.
+   - ✅ **Stage 2 — `TriageAgent`** (forced tool_use; quality gate; four exception classes; `CandidateRecord` audit). Cert: D4 TS 4.3, D4 TS 4.1, D5 TS 5.6.
+   - ✅ **Stage 3 — `SynthesisAgent`** (parallel batched + one retry; per-paper `confidence: float`; notes channel; disclaimer-fill with confidence=0.0 on permanent failures). Cert: D1 TS 1.6, D4 TS 4.3, **D4 TS 4.4** (first use), D5 TS 5.1, D5 TS 5.3.
+   - ✅ **Stage 4 — `EraPartitionAgent`** (forced tool_use; `ERAS_MIN=2`, `ERAS_MAX=4`; content-driven boundaries; year ints; four cross-field invariants). Cert: D4 TS 4.3, D1 TS 1.6, D5 TS 5.6.
+   - ✅ **Stage 5 — `ExecutiveSummaryAgent`** (forced tool_use; 150–200-word soft target; self-rated confidence; eras-first user-message ordering for D5 TS 5.1 mitigation). Cert: D4 TS 4.3, D1 TS 1.6, D5 TS 5.1, D5 TS 5.6.
+   - ✅ **Stage 6 — `SequentialArchitecture` orchestrator** (`orchestrator.py`). Pure code; wires the five LLM stages; lifts year-ints → `date(year, 1, 1)` / `date(year, 12, 31)` for `TimelineEra`; sums per-stage usage; `PaperEntry.confidence` propagates directly from `PaperSynthesis.confidence`. Cert: D1 TS 1.6 (primary), D1 TS 1.4, D5 TS 5.3, D5 TS 5.6.
+- Auxiliary modules: `papertrail.pricing` (3rd-caller extraction; `compute_cost_usd` + `MODEL_PRICING_PER_MTOK`); `papertrail.provenance` (shared `build_provenance` for any architecture).
+- Schema additions (additive, no breaking changes): `Telemetry.synthesis_notes: list[SynthesisNote]`; `SynthesisNote` defined in `benchmark.py`.
+- Runner: registry switched from `type[Architecture]` to factory functions `(AsyncAnthropic | None) -> Architecture` so arch_00 (no client) and arch_01 (needs client) coexist. CLI builds one shared client when either the architecture or the evaluator needs it.
+- Test count: **289 passing**, ruff + mypy strict clean across 21 source files.
 
-**Open/deferred items:**
+**Next session — resume here:**
 
-- **ADR-0005 D5 TS 5.1 framing nitpick**: "structured handoff between stages" wording should be tightened to "context preservation via compact tool_result." Not blocking; cleanup commit.
-- **ADR documenting D4 TS 4.4 un-deferral**: stage 3's retry-with-feedback was introduced without a follow-up ADR. Either a short ADR-0007 or an addendum to ADR-0005.
-- **`PaperEntry.confidence` handling in stage 6 assembly**: deliberately not emitted by stage 3 per user direction ("confidence is further down the line"). Stage 6 will set a constant or simple heuristic for arch_01; user expected to weigh in when stage 6 lands.
-- **Citation lookup integration**: deferred for arch_01 (would double stage 1's tool surface). Revisit for arch_02 or as a later tool upgrade.
-- **`MODEL_PRICING_PER_MTOK`** (`src/papertrail/pricing.py`): hand-maintained, verified 2026-05-15. Update when Anthropic publishes new rates.
-- **Architecture-side cost tracking**: `BenchmarkResult.telemetry.total_cost_usd` populated by each architecture (arch_00 always 0). Evaluator's cost on `EvaluatorScore.usage.cost_usd_estimated` separately — by design.
-- **Provenance helpers in `BaselineArchitecture`** (move to harness): open since arch_00; stage 6 / orchestrator work would be a natural moment to do it.
+1. **Quick arxiv check first:**
+   ```bash
+   curl -s -o /dev/null -w "%{http_code}\n" "https://export.arxiv.org/api/query?search_query=all:test&max_results=1"
+   ```
+   Expect `200`. If `429`: arxiv is still throttling our IP from the 2026-05-17 attempts; wait longer.
+2. **Once arxiv is green, run arch_01 end-to-end:**
+   ```bash
+   uv run python scripts/run_benchmark.py \
+       --topic "Attention mechanism for text generation" \
+       --architecture arch_01_sequential --verbose
+   ```
+   Expected cost ~$0.07–0.08 (Haiku stages ~$0.04, Sonnet evaluator ~$0.03). Worst-case time including arxiv backoffs: a few minutes.
+3. **Examine the run:** deliverable structure, per-paper confidences, era partition, executive summary, evaluator score breakdown. Compare implicit/explicit signals against arch_00's earlier `self-attention` result (overall=0.18).
+4. **Optional follow-ups** after the first successful run: arch_01 on `self-attention` for an A/B against arch_00; or arch_00 on `Attention mechanism for text generation` for the inverse A/B.
+
+**Open / deferred items:**
+
+- **arxiv was throttling our IP on 2026-05-17.** Three back-to-back attempts (one arch_01 + one arch_00 diagnostic + a re-run after the pacing fix shipped) all hit 429s, with arxiv slow-walking responses up to 15 s before sending the 429. No `Retry-After` header. The pacing/backoff fix is the right architectural answer (in production we will hit arxiv much less aggressively), but the cooldown after our test bursts is real. Tomorrow's wait should clear it.
+- **No ADR** yet for: D4 TS 4.4 retry-with-feedback un-deferral (stage 3); the arxiv pacing+backoff design (D2 TS 2.2 territory). Either small standalone ADRs or one combined "session 5/6 follow-up" ADR.
+- **ADR-0005 D5 TS 5.1 framing nitpick** — "structured handoff between stages" wording could be tightened to "context preservation via compact tool_result." Cosmetic; not blocking.
+- **arch_00's previous run was on "self-attention".** Tomorrow's arch_01 run is on "Attention mechanism for text generation". They are not directly comparable; pick one shared topic if you want a clean A/B.
+- **Citation lookup integration**: still deferred for arch_01 (would double stage 1's tool surface). Revisit for arch_02 or as a later tool upgrade.
+- **`MODEL_PRICING_PER_MTOK`**: hand-maintained, verified 2026-05-15. Update when Anthropic publishes new rates.
 - **`apps/` legacy code deletion**: open; whenever convenient.
+- **Per-stage `TraceStep` entries in `Telemetry.trace`**: deferred during stage 6; arch_01 currently emits `trace=[]`. Future "observability pass" lands them.
 
-**Recently resolved (this session):**
+**Recently resolved (this session, spanning 2026-05-15..17):**
 
-- ADR-0006 — `Deliverable.papers` floor 8 → 4, decoupling arch_00's local guard from the schema.
-- D4 TS 4.4 retry-with-feedback — un-deferred for stage 3 (single retry on missing papers).
-- Pricing module extracted to `papertrail.pricing` (triage was the third caller).
-- Full cert guide (`CCA_Foundations_Guide.pdf`) read for the first time; session-start protocol now mandates this. See memory `[[reference-cert-guide-synopsis]]` + `[[feedback-concept-introduction]]`.
+- arch_01 stages 1–6 all merged on `dev`; arch_01 invocable end-to-end via the CLI runner.
+- ADR-0006 (schema floor 8 → 4).
+- `papertrail.pricing` and `papertrail.provenance` extracted from their original homes.
+- `PaperSynthesis.confidence: float` added; stage 6 propagates it directly into `PaperEntry.confidence` (no heuristic — disclaimer-filled syntheses carry 0.0 as the code-emitted floor).
+- arxiv 429 handling overhauled: 4 s inter-request pacing + 5/15/45 s exponential backoff. Tests get a `tests/tools/conftest.py` autouse fixture that bypasses the sleep for speed.
+- Full cert guide PDF read for the first time; session-start protocol mandates this. See `[[reference-cert-guide-synopsis]]`.
+- New / updated memories: `[[feedback-concept-introduction]]`, `[[feedback-commit-message-brevity]]`, tighter `[[feedback-code-snippet-summaries]]` and `[[feedback-quiz-answer-parity]]`.
 
 ## Update protocol
 
