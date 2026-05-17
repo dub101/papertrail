@@ -49,7 +49,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Final, cast
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from papertrail.benchmark import ARXIV_ID_RE, ErrorRecord
+from papertrail.benchmark import ARXIV_ID_RE, ErrorRecord, SynthesisNote
 from papertrail.pricing import compute_cost_usd
 from papertrail.prompts import load_prompt
 
@@ -173,19 +173,22 @@ class SynthesisError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class SynthesisUsage:
-    """Token + cost totals across all batch calls (round 1 + retry round)."""
+    """Token + cost totals across all batch calls (round 1 + retry round).
+
+    ``batches_attempted`` counts the total number of ``messages.create``
+    calls the stage made (round 1 + round 2), so the orchestrator can
+    fold it into ``Telemetry.agent_call_count`` without recomputing.
+    """
 
     input_tokens: int
     output_tokens: int
     cost_usd: float
+    batches_attempted: int = 0
 
 
-@dataclass(frozen=True, slots=True)
-class SynthesisNote:
-    """One model-emitted note, routed to telemetry rather than the deliverable."""
-
-    arxiv_id: str
-    note: str
+# ``SynthesisNote`` lives in ``papertrail.benchmark`` so ``Telemetry`` can
+# reference it without inverting the layering (benchmark.py is the schema
+# layer; this file is an architecture-specific stage). Imported above.
 
 
 @dataclass(frozen=True, slots=True)
@@ -362,6 +365,7 @@ class SynthesisAgent:
         )
         total_in += round1_in
         total_out += round1_out
+        batches_attempted = len(round1_batches)
 
         # ─── Round 2: retry only the still-missing papers ───
         all_ids = [p.arxiv_id for p in papers]
@@ -382,6 +386,7 @@ class SynthesisAgent:
             )
             total_in += round2_in
             total_out += round2_out
+            batches_attempted += len(round2_batches)
 
         # ─── Disclaimer fill for papers still missing after retry ───
         still_missing = [aid for aid in all_ids if aid not in synthesised]
@@ -415,6 +420,7 @@ class SynthesisAgent:
             error_records=tuple(error_records),
             notes=tuple(notes),
             usage=SynthesisUsage(
+                batches_attempted=batches_attempted,
                 input_tokens=total_in,
                 output_tokens=total_out,
                 cost_usd=compute_cost_usd(self._model, total_in, total_out),

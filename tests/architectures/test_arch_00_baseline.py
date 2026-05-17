@@ -374,18 +374,6 @@ async def test_citation_fields_are_none() -> None:
         assert p.citation_source is None
 
 
-# ───── Provenance helpers ───────────────────────────────────────────────
-
-
-def test_papertrail_version_is_a_string() -> None:
-    """``_papertrail_version`` returns a non-empty version string."""
-    v = baseline_module._papertrail_version()
-    assert isinstance(v, str)
-    assert v  # Either the metadata version or the in-module fallback.
-
-
-def test_git_sha_returns_a_string() -> None:
-    """``_git_sha`` returns a non-empty string (a sha or ``"unknown"``)."""
-    sha = baseline_module._git_sha()
-    assert isinstance(sha, str)
-    assert sha  # Either a hex sha or "unknown"; never empty.
+# Provenance-helper tests moved to ``tests/test_provenance.py`` when the
+# helpers themselves moved to ``papertrail.provenance`` (extracted once
+# arch_01 became a second consumer).

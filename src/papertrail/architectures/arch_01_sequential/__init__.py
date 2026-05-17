@@ -41,6 +41,9 @@ from papertrail.architectures.arch_01_sequential.executive_summary import (
     ExecutiveSummaryResult,
     ExecutiveSummaryUsage,
 )
+from papertrail.architectures.arch_01_sequential.orchestrator import (
+    SequentialArchitecture,
+)
 from papertrail.architectures.arch_01_sequential.search import (
     MAX_SEARCH_ITERATIONS,
     MIN_PAPERS_TO_PROCEED,
@@ -55,7 +58,6 @@ from papertrail.architectures.arch_01_sequential.synthesis import (
     SynthesisAgent,
     SynthesisBatchOutput,
     SynthesisError,
-    SynthesisNote,
     SynthesisResult,
     SynthesisUsage,
 )
@@ -72,6 +74,7 @@ from papertrail.architectures.arch_01_sequential.triage import (
     TriageSelection,
     TriageUsage,
 )
+from papertrail.benchmark import SynthesisNote
 
 __all__ = [
     "ERAS_MAX",
@@ -101,6 +104,7 @@ __all__ = [
     "SearchInsufficientResultsError",
     "SearchResult",
     "SearchTelemetry",
+    "SequentialArchitecture",
     "SynthesisAgent",
     "SynthesisBatchOutput",
     "SynthesisError",

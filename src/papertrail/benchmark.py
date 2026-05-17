@@ -307,6 +307,24 @@ class UnresolvedLookup(_StrictModel):
     attempted_at: datetime
 
 
+class SynthesisNote(_StrictModel):
+    """One per-paper note emitted by an architecture's synthesis stage.
+
+    Routed into ``Telemetry.synthesis_notes`` by the orchestrator rather
+    than into the deliverable: notes are observations worth flagging to
+    a human reviewer ("the abstract has a typo here", "this paper looks
+    mis-triaged") but they don't belong in user-facing deliverable prose.
+
+    Lives in ``benchmark.py`` (the schema layer) rather than inside an
+    architecture-specific module because ``Telemetry`` references it.
+    arch_01's ``SynthesisAgent`` and any future architecture's synthesis
+    stage import this shape from here.
+    """
+
+    arxiv_id: str = Field(pattern=ARXIV_ID_RE)
+    note: str = Field(min_length=1, max_length=500)
+
+
 class Telemetry(_StrictModel):
     """How the run went. The Evaluator and human debuggers read this side."""
 
@@ -337,6 +355,10 @@ class Telemetry(_StrictModel):
     errors: list[ErrorRecord] = Field(default_factory=list)
     candidates: list[CandidateRecord] = Field(default_factory=list)
     unresolved_lookups: list[UnresolvedLookup] = Field(default_factory=list)
+    # Per-paper notes flagged by an architecture's synthesis stage —
+    # observations meant for human reviewers rather than the deliverable
+    # itself (e.g. "abstract has a typo", "paper looks mis-triaged").
+    synthesis_notes: list[SynthesisNote] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _finished_after_started(self) -> Telemetry:
