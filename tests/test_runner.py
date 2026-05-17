@@ -176,6 +176,24 @@ def test_resolve_architecture_rejects_unknown_name() -> None:
     assert "Available" in str(exc.value)
 
 
+def test_resolve_arch_01_requires_client() -> None:
+    """arch_01_sequential cannot be built without an Anthropic client."""
+    with pytest.raises(ValueError, match="requires an Anthropic client"):
+        _resolve_architecture("arch_01_sequential")
+
+
+def test_resolve_arch_01_builds_with_client() -> None:
+    """With a client, the registry returns a SequentialArchitecture instance."""
+    from unittest.mock import MagicMock
+
+    from papertrail.architectures.arch_01_sequential import SequentialArchitecture
+
+    fake_client = MagicMock()
+    arch = _resolve_architecture("arch_01_sequential", client=fake_client)
+    assert isinstance(arch, SequentialArchitecture)
+    assert arch.name == "arch_01_sequential"
+
+
 # ───── run_benchmark ────────────────────────────────────────────────────
 
 

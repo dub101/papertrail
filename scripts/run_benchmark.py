@@ -33,6 +33,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from papertrail.architectures.arch_00_baseline import BaselineArchitecture
 from papertrail.benchmark import BenchmarkResult
 from papertrail.evaluator import DryRunEvaluator, Evaluator, EvaluatorScore
 from papertrail.runner import (
@@ -91,31 +92,56 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _pick_evaluator(args: argparse.Namespace) -> EvaluatorLike | None:
+def _needs_real_client(args: argparse.Namespace) -> bool:
+    """True iff either the architecture or the evaluator needs a real client.
+
+    arch_01_sequential makes LLM calls; arch_00_baseline doesn't.
+    A "real" evaluator (neither ``--dry-run`` nor ``--no-evaluator``)
+    makes LLM calls. When *either* is true, the CLI builds one shared
+    client and threads it to both places.
+    """
+    arch_needs = args.architecture != BaselineArchitecture.name
+    evaluator_needs = not args.dry_run and not args.no_evaluator
+    return arch_needs or evaluator_needs
+
+
+def _build_client() -> object:
+    """Construct one ``AsyncAnthropic`` instance from ``ANTHROPIC_API_KEY``.
+
+    Returns ``object`` rather than ``AsyncAnthropic`` so the import is
+    fully lazy — the script's no-API-key paths (arch_00 + --dry-run)
+    don't pay the import cost.
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        print(
+            "error: ANTHROPIC_API_KEY is not set. "
+            "Use --architecture arch_00_baseline with --dry-run for "
+            "zero-cost testing, or add the key to your .env.",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
+    from anthropic import AsyncAnthropic
+    return AsyncAnthropic(api_key=api_key)
+
+
+def _pick_evaluator(
+    args: argparse.Namespace, *, client: object | None,
+) -> EvaluatorLike | None:
     """Construct the evaluator implied by the CLI flags.
 
-    Returns ``None`` when ``--no-evaluator`` was passed. Returns a
-    ``DryRunEvaluator`` for ``--dry-run``. Otherwise constructs a real
-    ``Evaluator`` and exits with code 2 if ``ANTHROPIC_API_KEY`` is unset
-    (no point reaching ``messages.create`` only to fail there).
+    ``--no-evaluator`` → ``None``. ``--dry-run`` → ``DryRunEvaluator``.
+    Otherwise → real ``Evaluator`` using the supplied client (which
+    ``main`` already built because ``_needs_real_client`` was true).
     """
     if args.no_evaluator:
         return None
     if args.dry_run:
         return DryRunEvaluator()
-    # Real evaluator path — needs an API key.
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        print(
-            "error: ANTHROPIC_API_KEY is not set. "
-            "Use --dry-run for zero-cost testing, or add the key to your .env.",
-            file=sys.stderr,
-        )
-        raise SystemExit(2)
-    # Lazy import: ``anthropic`` only needed when a real evaluator is built.
-    from anthropic import AsyncAnthropic
-
-    return Evaluator(AsyncAnthropic(api_key=api_key))
+    # The real evaluator path is only reachable when _needs_real_client
+    # was True, so the client has been built.
+    assert client is not None, "main() should have built a client by now"
+    return Evaluator(client)  # type: ignore[arg-type]
 
 
 # ───── Console output ───────────────────────────────────────────────────
@@ -233,17 +259,24 @@ def _print_verbose_table(result: BenchmarkResult, score: EvaluatorScore | None) 
 
 async def main(argv: list[str] | None = None) -> int:
     """Async entry point. Returns the process exit code."""
-    # ``load_dotenv`` is no-op if .env is missing — safe to call unconditionally.
-    # We do it before constructing the evaluator so ANTHROPIC_API_KEY is in env.
+    # ``load_dotenv`` is no-op if .env is missing — safe to call
+    # unconditionally. We do it before client construction so
+    # ANTHROPIC_API_KEY is in env when needed.
     load_dotenv()
 
     args = _build_parser().parse_args(argv)
-    evaluator = _pick_evaluator(args)
+
+    # Build the client once if either the architecture or the evaluator
+    # needs it; share between both. Zero-cost paths (arch_00 + --dry-run
+    # or arch_00 + --no-evaluator) skip the build entirely.
+    client = _build_client() if _needs_real_client(args) else None
+    evaluator = _pick_evaluator(args, client=client)
 
     result, score, path = await run_benchmark(
         topic=args.topic,
         architecture=args.architecture,
         evaluator=evaluator,
+        client=client,  # type: ignore[arg-type]
         output_dir=args.output_dir,
     )
 
