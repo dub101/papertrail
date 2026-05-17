@@ -171,8 +171,15 @@ class SequentialArchitecture(Architecture):
         search = await self._search.search(topic)
 
         # ─── Stage 2: triage and select 4-12 papers ───
+        # Stage 1's agentic loop is nondeterministic and can return 80+
+        # papers on a productive run. The triage prompt expects ~25-35
+        # candidates; handing the model 80 forces it to emit 80 decisions
+        # and blow past max_tokens. Cap at 40 in arxiv-relevance order so
+        # triage always sees a manageable pool.
+        _TRIAGE_INPUT_CAP = 40
+        candidate_pool = list(search.papers[:_TRIAGE_INPUT_CAP])
         triage = await self._triage.triage(
-            topic=topic, candidates=list(search.papers)
+            topic=topic, candidates=candidate_pool
         )
 
         # ─── Stage 3: per-paper synthesis (parallel batches + one retry) ───
