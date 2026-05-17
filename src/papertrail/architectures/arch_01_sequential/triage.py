@@ -91,6 +91,20 @@ class _StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+def _arxiv_id_root(arxiv_id: str) -> str:
+    """Strip the optional ``vN`` version suffix from an arxiv_id.
+
+    The model sometimes emits ``2206.05457v2`` when the input had
+    ``2206.05457`` (or vice versa). Same paper, same selection
+    significance; the version difference is not a fabrication.
+    """
+    if "v" in arxiv_id:
+        idx = arxiv_id.rfind("v")
+        if arxiv_id[idx + 1:].isdigit():
+            return arxiv_id[:idx]
+    return arxiv_id
+
+
 class TriageDecision(_StrictModel):
     """One per-paper verdict.
 
@@ -461,22 +475,30 @@ class TriageAgent:
         Order matters: check fabricated ids before missing ids, because a
         fabricated id is a stronger signal of model misbehavior than a
         missing one (which could just be an under-eager truncation).
+
+        arxiv version suffixes (``v1``, ``v2``, ...) are normalised before
+        comparison — the model occasionally adds or strips a version even
+        though we render exactly what arxiv returned. The same paper at
+        a different version is the same paper for selection purposes.
         """
         decision_ids = [d.arxiv_id for d in selection.decisions]
-        input_set = set(input_ids)
-        decision_set = set(decision_ids)
+        # Normalise both sides by stripping the optional vN suffix so
+        # "2206.05457" and "2206.05457v2" compare equal.
+        input_root_set = {_arxiv_id_root(a) for a in input_ids}
+        decision_roots = [_arxiv_id_root(a) for a in decision_ids]
+        decision_root_set = set(decision_roots)
 
-        fabricated = decision_set - input_set
+        fabricated = decision_root_set - input_root_set
         if fabricated:
             raise TriageInvalidOutputError(
                 f"Triage produced decisions for arxiv_ids not in the input: "
                 f"{sorted(fabricated)}"
             )
 
-        if len(decision_ids) != len(decision_set):
+        if len(decision_roots) != len(decision_root_set):
             seen: set[str] = set()
             duplicates: set[str] = set()
-            for aid in decision_ids:
+            for aid in decision_roots:
                 if aid in seen:
                     duplicates.add(aid)
                 seen.add(aid)
@@ -485,7 +507,7 @@ class TriageAgent:
                 f"{sorted(duplicates)}"
             )
 
-        missing = input_set - decision_set
+        missing = input_root_set - decision_root_set
         if missing:
             raise TriageInvalidOutputError(
                 f"Triage missed {len(missing)} input candidate(s): "
