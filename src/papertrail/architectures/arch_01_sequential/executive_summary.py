@@ -411,9 +411,14 @@ class ExecutiveSummaryAgent:
                 try:
                     return ExecutiveSummary.model_validate(block.input)
                 except ValidationError as e:
+                    input_repr = repr(block.input)[:500]
                     raise ExecutiveSummaryInvalidOutputError(
                         f"submit_executive_summary input failed schema "
-                        f"validation: {e}"
+                        f"validation. "
+                        f"stop_reason={response.stop_reason!r}; "
+                        f"tool_use_input={input_repr}; "
+                        f"text_blocks={text_summary[:300]!r}; "
+                        f"pydantic={e}"
                     ) from e
             if block.type == "text":
                 text_summary += block.text
