@@ -27,20 +27,51 @@ The runner just wires them.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from papertrail.architecture import Architecture
 from papertrail.architectures.arch_00_baseline import BaselineArchitecture
+from papertrail.architectures.arch_01_sequential import SequentialArchitecture
 from papertrail.benchmark import BenchmarkResult
 from papertrail.evaluator import DryRunEvaluator, Evaluator, EvaluatorScore
 
-# Architecture registry. As new architectures land (arch_01 ... arch_06)
-# they get one line added here. Adding via plugin discovery would be more
-# flexible but less debuggable — a misspelled name should error out, not
-# silently miss.
-ARCHITECTURES: Final[dict[str, type[Architecture]]] = {
-    BaselineArchitecture.name: BaselineArchitecture,
+if TYPE_CHECKING:
+    from anthropic import AsyncAnthropic
+
+
+# Per-architecture factory: takes the optional Anthropic client and
+# returns an instance. arch_00 ignores the client (zero LLM calls);
+# arch_01 requires it and raises if absent. Keeping the registry as
+# factories instead of classes lets architectures with different
+# constructor requirements coexist in the same dict.
+ArchitectureFactory = Callable[["AsyncAnthropic | None"], Architecture]
+
+
+def _build_arch_00(client: AsyncAnthropic | None) -> Architecture:
+    """arch_00 is the no-LLM floor — the client is ignored."""
+    _ = client
+    return BaselineArchitecture()
+
+
+def _build_arch_01(client: AsyncAnthropic | None) -> Architecture:
+    """arch_01 makes real LLM calls — refuse to build without a client."""
+    if client is None:
+        raise ValueError(
+            "arch_01_sequential requires an Anthropic client; "
+            "pass client=AsyncAnthropic(...) to run_benchmark"
+        )
+    return SequentialArchitecture(client)
+
+
+# Architecture registry. As new architectures land (arch_02 ... arch_06)
+# they get one factory line added here. Adding via plugin discovery
+# would be more flexible but less debuggable — a misspelled name should
+# error out, not silently miss.
+ARCHITECTURES: Final[dict[str, ArchitectureFactory]] = {
+    BaselineArchitecture.name: _build_arch_00,
+    SequentialArchitecture.name: _build_arch_01,
 }
 
 # Default location for run artifacts. Gitignored — these are produced
@@ -72,23 +103,28 @@ def _filename_for_run(result: BenchmarkResult) -> str:
     return f"{ts}_{result.telemetry.architecture_name}_{short_id}.json"
 
 
-def _resolve_architecture(architecture: Architecture | str) -> Architecture:
+def _resolve_architecture(
+    architecture: Architecture | str,
+    *,
+    client: AsyncAnthropic | None = None,
+) -> Architecture:
     """Accept either a name or a pre-constructed instance.
 
-    Names go through the registry; instances are returned as-is. This dual
-    shape lets the CLI keep a small surface (string from argparse) while
-    tests stay clean (inject a fake architecture instance directly without
-    touching the registry).
+    Names go through the registry's factories; instances are returned
+    as-is. ``client`` is forwarded to factories that need it (arch_01+);
+    arch_00 ignores it. This dual shape lets the CLI keep a small
+    surface (string from argparse) while tests stay clean (inject a
+    fake architecture instance directly without touching the registry).
     """
     if isinstance(architecture, Architecture):
         return architecture
-    arch_cls = ARCHITECTURES.get(architecture)
-    if arch_cls is None:
+    factory = ARCHITECTURES.get(architecture)
+    if factory is None:
         raise ValueError(
             f"Unknown architecture {architecture!r}. "
             f"Available: {sorted(ARCHITECTURES)}"
         )
-    return arch_cls()
+    return factory(client)
 
 
 # ───── Public API ───────────────────────────────────────────────────────
@@ -99,6 +135,7 @@ async def run_benchmark(
     topic: str,
     architecture: Architecture | str,
     evaluator: EvaluatorLike | None,
+    client: AsyncAnthropic | None = None,
     output_dir: Path = DEFAULT_OUTPUT_DIR,
 ) -> tuple[BenchmarkResult, EvaluatorScore | None, Path]:
     """Execute one architecture against ``topic`` and persist the run.
@@ -124,7 +161,7 @@ async def run_benchmark(
         Anything ``evaluator.evaluate()`` raises (``EvaluatorRefusedError``,
             ``EvaluatorInvalidOutputError``) propagates for the same reason.
     """
-    arch = _resolve_architecture(architecture)
+    arch = _resolve_architecture(architecture, client=client)
 
     # The architecture call is the heavy step for everything from arch_01
     # onward. For arch_00 it's one arxiv search.
