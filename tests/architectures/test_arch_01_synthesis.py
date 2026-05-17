@@ -52,7 +52,9 @@ def _papers(n: int) -> list[ArxivPaper]:
     return [_arxiv_paper(i) for i in range(n)]
 
 
-def _synthesis_dict(arxiv_id: str, *, notes: str | None = None) -> dict[str, Any]:
+def _synthesis_dict(
+    arxiv_id: str, *, notes: str | None = None, confidence: float = 0.85
+) -> dict[str, Any]:
     """Build a valid PaperSynthesis dict (the model-emitted shape)."""
     out: dict[str, Any] = {
         "arxiv_id": arxiv_id,
@@ -61,6 +63,7 @@ def _synthesis_dict(arxiv_id: str, *, notes: str | None = None) -> dict[str, Any
         "summary_problem": f"The problem {arxiv_id} addresses.",
         "summary_approach": f"The approach {arxiv_id} takes.",
         "summary_impact": f"The impact of {arxiv_id}.",
+        "confidence": confidence,
     }
     if notes is not None:
         out["notes"] = notes
@@ -230,6 +233,76 @@ async def test_synthesize_collects_non_null_notes_into_telemetry_channel() -> No
     assert len(result.notes) == 2
     note_ids = {n.arxiv_id for n in result.notes}
     assert note_ids == {papers[0].arxiv_id, papers[2].arxiv_id}
+
+
+# ───── Per-paper confidence ─────────────────────────────────────────────
+
+
+async def test_synthesize_propagates_model_emitted_confidence_per_paper() -> None:
+    """Confidence values emitted by the model propagate into PaperSynthesis."""
+    papers = _papers(4)
+    syntheses = [
+        _synthesis_dict(papers[0].arxiv_id, confidence=0.95),
+        _synthesis_dict(papers[1].arxiv_id, confidence=0.60),
+        _synthesis_dict(papers[2].arxiv_id, confidence=0.40),
+        _synthesis_dict(papers[3].arxiv_id, confidence=0.85),
+    ]
+    response = _fake_message([_tool_use_block(syntheses)])
+    agent = SynthesisAgent(_fake_client_seq([response]))
+
+    result = await agent.synthesize(topic="t", papers=papers)
+
+    confidence_by_id = {s.arxiv_id: s.confidence for s in result.syntheses}
+    assert confidence_by_id[papers[0].arxiv_id] == 0.95
+    assert confidence_by_id[papers[1].arxiv_id] == 0.60
+    assert confidence_by_id[papers[2].arxiv_id] == 0.40
+    assert confidence_by_id[papers[3].arxiv_id] == 0.85
+
+
+async def test_synthesize_disclaimer_synthesis_has_zero_confidence() -> None:
+    """A paper that fails both rounds gets a disclaimer with confidence=0.0."""
+    papers = _papers(4)
+    missing_id = papers[2].arxiv_id
+    other_ids = [p.arxiv_id for p in papers if p.arxiv_id != missing_id]
+    responses: list[MagicMock | Exception] = [
+        # Round 1: covers 3 of 4
+        _fake_message(
+            [_tool_use_block([_synthesis_dict(aid) for aid in other_ids])]
+        ),
+        # Round 2: retry also fails
+        ConnectionError("retry also failed"),
+    ]
+    agent = SynthesisAgent(_fake_client_seq(responses))
+
+    result = await agent.synthesize(topic="t", papers=papers)
+
+    # The disclaimer-filled paper has confidence=0.0 (code-emitted floor).
+    confidence_by_id = {s.arxiv_id: s.confidence for s in result.syntheses}
+    assert confidence_by_id[missing_id] == 0.0
+    # The other three carry the model-emitted 0.85 from _synthesis_dict default.
+    for other in other_ids:
+        assert confidence_by_id[other] == 0.85
+
+
+def test_paper_synthesis_rejects_confidence_out_of_range() -> None:
+    """confidence must be in [0.0, 1.0]."""
+    base = _synthesis_dict("1706.00001")
+    for bad in (-0.1, 1.1, 1.5, -10.0):
+        broken = base.copy()
+        broken["confidence"] = bad
+        with pytest.raises(ValidationError):
+            PaperSynthesis.model_validate(broken)
+
+
+def test_paper_synthesis_requires_confidence_field() -> None:
+    """confidence is not optional."""
+    bad = {
+        k: v
+        for k, v in _synthesis_dict("1706.00001").items()
+        if k != "confidence"
+    }
+    with pytest.raises(ValidationError):
+        PaperSynthesis.model_validate(bad)
 
 
 # ───── Token + cost accounting ──────────────────────────────────────────

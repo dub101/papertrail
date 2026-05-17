@@ -34,26 +34,22 @@ so we can quantify what those architectures buy us.
 
 from __future__ import annotations
 
-import importlib.metadata
 import re
-import subprocess
 import time
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import ClassVar
 
-import papertrail
 from papertrail.architecture import Architecture
 from papertrail.benchmark import (
-    SCHEMA_VERSION,
     BenchmarkResult,
     Deliverable,
     Modes,
     PaperEntry,
-    Provenance,
     Telemetry,
     TimelineEra,
 )
+from papertrail.provenance import build_provenance
 from papertrail.tools.arxiv import ArxivPaper, arxiv_search
 
 # ───── Constants ────────────────────────────────────────────────────────
@@ -86,10 +82,9 @@ _MAX_ERAS = 3
 # from arxiv doesn't crash the whole run.
 _ARXIV_ID_RE = re.compile(r"^\d{4}\.\d{4,5}(v\d+)?$")
 
-# Cap on how long ``git rev-parse`` is allowed to take. Provenance is nice
-# to have, not critical — if git is slow or unavailable, we fall back to
-# "unknown" rather than blocking the run.
-_GIT_SHA_TIMEOUT_SECONDS = 2.0
+# Provenance helpers moved to ``papertrail.provenance`` once arch_01
+# appeared as a second consumer. ``build_provenance()`` is imported
+# above and used directly in ``run()``.
 
 
 # ───── Exceptions ───────────────────────────────────────────────────────
@@ -286,43 +281,6 @@ def _arxiv_to_paper_entry(
     )
 
 
-def _papertrail_version() -> str:
-    """Read the package version. Falls back to the in-module ``__version__``.
-
-    ``importlib.metadata`` is the canonical Python way to read a package's
-    declared version; in editable installs it can occasionally fail, so we
-    fall back to the constant declared in ``papertrail.__init__``.
-    """
-    try:
-        return importlib.metadata.version("papertrail")
-    except importlib.metadata.PackageNotFoundError:
-        return papertrail.__version__
-
-
-def _git_sha() -> str:
-    """Best-effort short git SHA of the current checkout, or ``"unknown"``.
-
-    Step-5 note: provenance should be injected by the benchmark harness, not
-    discovered by the architecture. This local helper exists so arch_00 can
-    self-test without a harness; once the harness lands, this becomes an
-    override default.
-    """
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--short=12", "HEAD"],
-            capture_output=True,
-            text=True,
-            timeout=_GIT_SHA_TIMEOUT_SECONDS,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return "unknown"
-    if result.returncode != 0:
-        return "unknown"
-    sha = result.stdout.strip()
-    return sha or "unknown"
-
-
 # ───── The architecture ─────────────────────────────────────────────────
 
 
@@ -452,12 +410,7 @@ class BaselineArchitecture(Architecture):
             unresolved_lookups=[],
         )
 
-        provenance = Provenance(
-            schema_version=SCHEMA_VERSION,
-            papertrail_version=_papertrail_version(),
-            git_sha=_git_sha(),
-            created_at=finished_at,
-        )
+        provenance = build_provenance(created_at=finished_at)
 
         return BenchmarkResult(
             deliverable=deliverable,

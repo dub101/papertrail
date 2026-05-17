@@ -48,7 +48,7 @@ def _papers(n: int) -> list[ArxivPaper]:
     return [_arxiv_paper(i) for i in range(n)]
 
 
-def _synthesis(arxiv_id: str) -> PaperSynthesis:
+def _synthesis(arxiv_id: str, *, confidence: float = 0.85) -> PaperSynthesis:
     """Build a minimal PaperSynthesis for the given arxiv_id."""
     return PaperSynthesis(
         arxiv_id=arxiv_id,
@@ -57,6 +57,7 @@ def _synthesis(arxiv_id: str) -> PaperSynthesis:
         summary_problem=f"The problem {arxiv_id} addresses.",
         summary_approach=f"The approach {arxiv_id} takes.",
         summary_impact=f"The impact of {arxiv_id}.",
+        confidence=confidence,
     )
 
 
