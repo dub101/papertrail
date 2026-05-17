@@ -68,13 +68,15 @@ INCLUDED_MIN: Final[int] = 4
 # Upper bound — structural, matches ``Deliverable.papers`` max_length.
 INCLUDED_MAX: Final[int] = 12
 
-# Per-call output cap. Triage emits up to 35 decisions, each ~80-100
-# output tokens (arxiv_id + verdict + reason + JSON envelope), plus the
-# outer ``decisions`` array overhead. 35 * 100 = ~3500 tokens of decision
-# content; 8192 gives comfortable headroom (~2x). The first real run on
-# 2026-05-17 hit max_tokens at 4096 and Anthropic returned a degraded
-# tool_use with empty input — preventing that recurrence.
-_MAX_TOKENS: Final[int] = 8192
+# Per-call output cap. The agentic loop is nondeterministic — different
+# runs can return 25-50+ candidate papers, and the model emits one
+# decision per candidate (~80-100 output tokens each). 4096 was hit
+# immediately; 8192 was still hit on a second run with a larger pool.
+# 16384 gives comfortable headroom for the largest realistic candidate
+# pool (~80 decisions). If we keep hitting it, the right fix is capping
+# the candidate count at orchestration time, not raising the budget
+# further.
+_MAX_TOKENS: Final[int] = 16384
 
 
 # ───── Pydantic schemas the model fills in ──────────────────────────────
