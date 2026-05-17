@@ -68,9 +68,13 @@ INCLUDED_MIN: Final[int] = 4
 # Upper bound — structural, matches ``Deliverable.papers`` max_length.
 INCLUDED_MAX: Final[int] = 12
 
-# Per-call output cap. Triage emits ~35 short JSON decisions; 4096 is
-# generous headroom and matches the Evaluator's order of magnitude.
-_MAX_TOKENS: Final[int] = 4096
+# Per-call output cap. Triage emits up to 35 decisions, each ~80-100
+# output tokens (arxiv_id + verdict + reason + JSON envelope), plus the
+# outer ``decisions`` array overhead. 35 * 100 = ~3500 tokens of decision
+# content; 8192 gives comfortable headroom (~2x). The first real run on
+# 2026-05-17 hit max_tokens at 4096 and Anthropic returned a degraded
+# tool_use with empty input — preventing that recurrence.
+_MAX_TOKENS: Final[int] = 8192
 
 
 # ───── Pydantic schemas the model fills in ──────────────────────────────
@@ -410,7 +414,11 @@ class TriageAgent:
             TriageRefusedError: No matching tool_use block was found
                 (model returned text only, or called a different tool).
             TriageInvalidOutputError: Tool_use block was present but its
-                ``input`` failed ``TriageSelection`` validation.
+                ``input`` failed ``TriageSelection`` validation. The
+                error carries ``stop_reason``, the raw tool input, and
+                any text content from the response so a degraded
+                response (e.g. truncation at max_tokens) is diagnosable
+                from the exception alone, not from process logs.
         """
         text_summary = ""
         for block in response.content:
@@ -418,8 +426,13 @@ class TriageAgent:
                 try:
                     return TriageSelection.model_validate(block.input)
                 except ValidationError as e:
+                    input_repr = repr(block.input)[:500]
                     raise TriageInvalidOutputError(
-                        f"submit_triage input failed schema validation: {e}"
+                        f"submit_triage input failed schema validation. "
+                        f"stop_reason={response.stop_reason!r}; "
+                        f"tool_use_input={input_repr}; "
+                        f"text_blocks={text_summary[:300]!r}; "
+                        f"pydantic={e}"
                     ) from e
             if block.type == "text":
                 # Capture text for the refusal error message — debugging
