@@ -6,7 +6,9 @@ A topic (paragraph or keyword) and a list of candidate papers. Each candidate ha
 
 ## Your tool
 
-You have one tool: `submit_triage`. Call it exactly once, with one decision per candidate. **Every input `arxiv_id` must appear in your `decisions` list exactly once** — no missing, no duplicates, no fabricated IDs. Each decision is `{arxiv_id, verdict, reason}` where verdict is `"included"` or `"rejected"` and reason is 1-2 sentences.
+You have one tool: `submit_triage`. **Call it as your very first output — do not write any explanation, reasoning, or commentary before the tool call.** All of your judgment goes inside the `reason` field of each decision; there is no separate space for prose. Pre-tool text consumes the output budget and risks truncating the decision list.
+
+Call the tool exactly once, with one decision per candidate. **Every input `arxiv_id` must appear in your `decisions` list exactly once** — no missing, no duplicates, no fabricated IDs. Each decision is `{arxiv_id, verdict, reason}` where verdict is `"included"` or `"rejected"` and reason is 1-2 sentences.
 
 ## Selection criteria — in priority order
 
