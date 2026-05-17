@@ -41,6 +41,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar, Final, cast
 
+import httpx
+
 from papertrail.benchmark import ErrorRecord
 from papertrail.pricing import compute_cost_usd
 from papertrail.prompts import load_prompt
@@ -264,6 +266,10 @@ class SearchAgent:
         # them across all its queries.
         unique_papers: dict[str, ArxivPaper] = {}
         queries_issued: list[str] = []
+        # Pre-declared so the inner tool_use loop can append on arxiv
+        # failure without forward-reference issues; populated below as
+        # the loop progresses.
+        error_records: list[ErrorRecord] = []
         messages: list[MessageParam] = [{"role": "user", "content": topic}]
 
         input_tokens = 0
@@ -322,9 +328,32 @@ class SearchAgent:
                     max_results = int(tool_input.get("max_results", 10))
                     queries_issued.append(query)
 
-                    papers = await arxiv_search(
-                        query=query, max_results=max_results
-                    )
+                    try:
+                        papers = await arxiv_search(
+                            query=query, max_results=max_results
+                        )
+                    except httpx.HTTPError as e:
+                        # arxiv failure mid-loop — record and exit with
+                        # whatever we've already collected. Without this
+                        # guard a single late 429 would kill an otherwise
+                        # productive loop.
+                        error_records.append(
+                            ErrorRecord(
+                                step_index=1,
+                                category="api",
+                                message=(
+                                    f"arxiv_search failed mid-loop on query "
+                                    f"{query!r}: {type(e).__name__}: {e}"
+                                ),
+                                recovered=True,
+                            )
+                        )
+                        final_stop_reason = "arxiv_error"
+                        # Break out of the inner tool_use loop AND the
+                        # outer while loop. Setting a sentinel string the
+                        # post-loop block recognises avoids replicating
+                        # the recovery branch.
+                        break
                     new_papers, dup_count = _fold_into_unique(papers, unique_papers)
                     tool_result_blocks.append(
                         {
@@ -338,11 +367,17 @@ class SearchAgent:
                             ),
                         }
                     )
-
-                messages.append(
-                    {"role": "user", "content": cast("Any", tool_result_blocks)}
-                )
-                continue
+                else:
+                    # Inner ``for block`` completed without ``break`` —
+                    # all tool_use blocks were processed successfully.
+                    # Continue the outer while loop normally.
+                    messages.append(
+                        {"role": "user", "content": cast("Any", tool_result_blocks)}
+                    )
+                    continue
+                # Inner loop broke due to arxiv error — fall through to
+                # outer break.
+                break
 
             # Anything else (``max_tokens``, ``pause_turn``, ``refusal``, ...)
             # is an unexpected stop. Drop out and let the post-loop block
@@ -364,7 +399,6 @@ class SearchAgent:
             )
 
         recovered = False
-        error_records: list[ErrorRecord] = []
         if final_stop_reason != "end_turn":
             # We have enough papers, but the model didn't choose to stop —
             # the cap fired, or refusal, or max_tokens. This is the D5 TS 5.3
