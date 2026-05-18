@@ -74,6 +74,7 @@ SUMMARY_FIELDS: Final[tuple[str, str, str, str, str]] = (
 # extraction from "duplicated in two places" to "shared module."
 # Re-exported below for any importer that still references the old names.
 
+
 class _StrictModel(BaseModel):
     """Local strict base — same shape as ``benchmark._StrictModel``.
 
@@ -363,8 +364,7 @@ def _format_deliverable_markdown(deliverable: Deliverable, *, topic: str) -> str
         # explicitly so the model doesn't have to guess what missing means.
         end = era.date_range_end.isoformat() if era.date_range_end else "present"
         lines.append(
-            f"## Era `{era.era_id}` — {era.name} "
-            f"({era.date_range_start.isoformat()} to {end})"
+            f"## Era `{era.era_id}` — {era.name} ({era.date_range_start.isoformat()} to {end})"
         )
         lines.append(f"\n{era.narrative}")
         lines.append(f"\n**Papers in era:** {', '.join(era.paper_ids)}\n")

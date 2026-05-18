@@ -178,14 +178,10 @@ class SequentialArchitecture(Architecture):
         # triage always sees a manageable pool.
         _TRIAGE_INPUT_CAP = 40
         candidate_pool = list(search.papers[:_TRIAGE_INPUT_CAP])
-        triage = await self._triage.triage(
-            topic=topic, candidates=candidate_pool
-        )
+        triage = await self._triage.triage(topic=topic, candidates=candidate_pool)
 
         # ─── Stage 3: per-paper synthesis (parallel batches + one retry) ───
-        synth = await self._synthesis.synthesize(
-            topic=topic, papers=list(triage.selected)
-        )
+        synth = await self._synthesis.synthesize(topic=topic, papers=list(triage.selected))
 
         # ─── Stage 4: content-driven era partition ───
         eras = await self._era_partition.partition(
@@ -196,7 +192,9 @@ class SequentialArchitecture(Architecture):
 
         # ─── Stage 5: executive summary + confidence ───
         exec_summary = await self._executive_summary.summarize(
-            topic=topic, eras=list(eras.eras), syntheses=list(synth.syntheses),
+            topic=topic,
+            eras=list(eras.eras),
+            syntheses=list(synth.syntheses),
         )
 
         finished_at = datetime.now(UTC)
@@ -236,9 +234,7 @@ class SequentialArchitecture(Architecture):
     ) -> BenchmarkResult:
         """Compose the five stages' outputs into one ``BenchmarkResult``."""
         # Build a synthesis lookup so PaperEntry assembly is O(1) per paper.
-        synth_by_id: dict[str, PaperSynthesis] = {
-            s.arxiv_id: s for s in synth.syntheses
-        }
+        synth_by_id: dict[str, PaperSynthesis] = {s.arxiv_id: s for s in synth.syntheses}
         # Build a paper-to-era_id map from the era partition.
         era_id_by_paper: dict[str, str] = {}
         for era in eras.eras:
@@ -260,9 +256,7 @@ class SequentialArchitecture(Architecture):
         # TimelineEras are built by lifting the year-ints from EraEntry
         # into proper ``date`` objects (Jan 1 / Dec 31 for the whole-year
         # convention). Order preserves the model's emitted order.
-        timeline = [
-            SequentialArchitecture._lift_era(era) for era in eras.eras
-        ]
+        timeline = [SequentialArchitecture._lift_era(era) for era in eras.eras]
 
         deliverable = Deliverable(
             topic=topic,
@@ -303,21 +297,13 @@ class SequentialArchitecture(Architecture):
         # to one tool invocation: arxiv_search for stage 1, the
         # submit_* tools for the rest).
         agent_call_count = (
-            search.telemetry.iterations_used
-            + 1
-            + synth.usage.batches_attempted
-            + 1
-            + 1
+            search.telemetry.iterations_used + 1 + synth.usage.batches_attempted + 1 + 1
         )
         # Stage 1 may emit multiple tool_use blocks per iteration if
         # the model decides to issue parallel queries — we tracked
         # those as ``queries_issued``. Other stages are 1:1.
         tool_call_count = (
-            len(search.telemetry.queries_issued)
-            + 1
-            + synth.usage.batches_attempted
-            + 1
-            + 1
+            len(search.telemetry.queries_issued) + 1 + synth.usage.batches_attempted + 1 + 1
         )
 
         # All error records concatenated. Stage 1 may emit one

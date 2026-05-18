@@ -102,7 +102,7 @@ def _arxiv_id_root(arxiv_id: str) -> str:
     """
     if "v" in arxiv_id:
         idx = arxiv_id.rfind("v")
-        if arxiv_id[idx + 1:].isdigit():
+        if arxiv_id[idx + 1 :].isdigit():
             return arxiv_id[:idx]
     return arxiv_id
 
@@ -493,8 +493,7 @@ class TriageAgent:
         fabricated = decision_root_set - input_root_set
         if fabricated:
             raise TriageInvalidOutputError(
-                f"Triage produced decisions for arxiv_ids not in the input: "
-                f"{sorted(fabricated)}"
+                f"Triage produced decisions for arxiv_ids not in the input: {sorted(fabricated)}"
             )
 
         if len(decision_roots) != len(decision_root_set):
@@ -505,20 +504,16 @@ class TriageAgent:
                     duplicates.add(aid)
                 seen.add(aid)
             raise TriageInvalidOutputError(
-                f"Triage produced duplicate decisions for arxiv_ids: "
-                f"{sorted(duplicates)}"
+                f"Triage produced duplicate decisions for arxiv_ids: {sorted(duplicates)}"
             )
 
         missing = input_root_set - decision_root_set
         if missing:
             raise TriageInvalidOutputError(
-                f"Triage missed {len(missing)} input candidate(s): "
-                f"{sorted(missing)}"
+                f"Triage missed {len(missing)} input candidate(s): {sorted(missing)}"
             )
 
-        included_count = sum(
-            1 for d in selection.decisions if d.verdict == "included"
-        )
+        included_count = sum(1 for d in selection.decisions if d.verdict == "included")
         if included_count > INCLUDED_MAX:
             raise TriageInvalidOutputError(
                 f"Triage included {included_count} papers; ceiling is "

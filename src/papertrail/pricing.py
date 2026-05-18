@@ -66,10 +66,7 @@ def compute_cost_usd(model: str, input_tokens: int, output_tokens: int) -> float
     if pricing is None:
         return 0.0
     input_rate, output_rate = pricing
-    return (
-        (input_tokens / 1_000_000) * input_rate
-        + (output_tokens / 1_000_000) * output_rate
-    )
+    return (input_tokens / 1_000_000) * input_rate + (output_tokens / 1_000_000) * output_rate
 
 
 __all__ = ["MODEL_PRICING_PER_MTOK", "compute_cost_usd"]

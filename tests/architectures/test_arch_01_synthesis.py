@@ -177,12 +177,8 @@ async def test_synthesize_happy_path_8_papers_in_two_batches() -> None:
     batch1_ids = [p.arxiv_id for p in papers[:4]]
     batch2_ids = [p.arxiv_id for p in papers[4:]]
     responses = [
-        _fake_message(
-            [_tool_use_block([_synthesis_dict(aid) for aid in batch1_ids])]
-        ),
-        _fake_message(
-            [_tool_use_block([_synthesis_dict(aid) for aid in batch2_ids])]
-        ),
+        _fake_message([_tool_use_block([_synthesis_dict(aid) for aid in batch1_ids])]),
+        _fake_message([_tool_use_block([_synthesis_dict(aid) for aid in batch2_ids])]),
     ]
     client = _fake_client_seq(responses)
     agent = SynthesisAgent(client)
@@ -202,9 +198,7 @@ async def test_synthesize_preserves_input_order_when_batches_return_unordered() 
     papers = _papers(4)  # one batch of 4
     # Model returns them in reverse:
     reversed_ids = [papers[3].arxiv_id, papers[2].arxiv_id, papers[1].arxiv_id, papers[0].arxiv_id]
-    response = _fake_message(
-        [_tool_use_block([_synthesis_dict(aid) for aid in reversed_ids])]
-    )
+    response = _fake_message([_tool_use_block([_synthesis_dict(aid) for aid in reversed_ids])])
     agent = SynthesisAgent(_fake_client_seq([response]))
 
     result = await agent.synthesize(topic="t", papers=papers)
@@ -266,9 +260,7 @@ async def test_synthesize_disclaimer_synthesis_has_zero_confidence() -> None:
     other_ids = [p.arxiv_id for p in papers if p.arxiv_id != missing_id]
     responses: list[MagicMock | Exception] = [
         # Round 1: covers 3 of 4
-        _fake_message(
-            [_tool_use_block([_synthesis_dict(aid) for aid in other_ids])]
-        ),
+        _fake_message([_tool_use_block([_synthesis_dict(aid) for aid in other_ids])]),
         # Round 2: retry also fails
         ConnectionError("retry also failed"),
     ]
@@ -296,11 +288,7 @@ def test_paper_synthesis_rejects_confidence_out_of_range() -> None:
 
 def test_paper_synthesis_requires_confidence_field() -> None:
     """confidence is not optional."""
-    bad = {
-        k: v
-        for k, v in _synthesis_dict("1706.00001").items()
-        if k != "confidence"
-    }
+    bad = {k: v for k, v in _synthesis_dict("1706.00001").items() if k != "confidence"}
     with pytest.raises(ValidationError):
         PaperSynthesis.model_validate(bad)
 
@@ -342,15 +330,11 @@ async def test_synthesize_retries_when_a_batch_raises() -> None:
     batch2_ids = [p.arxiv_id for p in papers[4:]]
     responses: list[MagicMock | Exception] = [
         # Round 1: batch 1 succeeds.
-        _fake_message(
-            [_tool_use_block([_synthesis_dict(aid) for aid in batch1_ids])]
-        ),
+        _fake_message([_tool_use_block([_synthesis_dict(aid) for aid in batch1_ids])]),
         # Round 1: batch 2 raises (e.g. network).
         ConnectionError("network blip"),
         # Round 2: retry of batch 2 succeeds.
-        _fake_message(
-            [_tool_use_block([_synthesis_dict(aid) for aid in batch2_ids])]
-        ),
+        _fake_message([_tool_use_block([_synthesis_dict(aid) for aid in batch2_ids])]),
     ]
     client = _fake_client_seq(responses)
     agent = SynthesisAgent(client)
@@ -378,9 +362,11 @@ async def test_synthesize_retries_when_a_batch_skips_papers() -> None:
     responses = [
         # Round 1: model emits 3 of 4 (omits papers[2]).
         _fake_message(
-            [_tool_use_block(
-                [_synthesis_dict(p.arxiv_id) for p in papers if p.arxiv_id != missing_id]
-            )]
+            [
+                _tool_use_block(
+                    [_synthesis_dict(p.arxiv_id) for p in papers if p.arxiv_id != missing_id]
+                )
+            ]
         ),
         # Round 2: retry of just papers[2] succeeds.
         _fake_message([_tool_use_block([_synthesis_dict(missing_id)])]),
@@ -406,9 +392,7 @@ async def test_synthesize_disclaimer_fills_papers_missing_after_retry() -> None:
     other_ids = [p.arxiv_id for p in papers if p.arxiv_id != missing_id]
     responses: list[MagicMock | Exception] = [
         # Round 1: covers 3 of 4.
-        _fake_message(
-            [_tool_use_block([_synthesis_dict(aid) for aid in other_ids])]
-        ),
+        _fake_message([_tool_use_block([_synthesis_dict(aid) for aid in other_ids])]),
         # Round 2: also fails to return the missing one (raises).
         ConnectionError("retry also failed"),
     ]
@@ -425,9 +409,7 @@ async def test_synthesize_disclaimer_fills_papers_missing_after_retry() -> None:
     assert missing_synth.summary_about != missing_synth.summary_problem
     # Two ErrorRecords: one for the round-2 batch failure, one per-paper.
     assert len(result.error_records) == 2
-    per_paper_record = next(
-        r for r in result.error_records if missing_id in r.message
-    )
+    per_paper_record = next(r for r in result.error_records if missing_id in r.message)
     assert per_paper_record.recovered is True
     assert per_paper_record.step_index == 3
 
@@ -458,15 +440,19 @@ async def test_synthesize_treats_fabricated_arxiv_id_as_batch_failure() -> None:
     responses = [
         # Round 1: includes a fabricated id (and omits one real one).
         _fake_message(
-            [_tool_use_block(
-                [_synthesis_dict(papers[0].arxiv_id), _synthesis_dict(fake_id),
-                 _synthesis_dict(papers[2].arxiv_id), _synthesis_dict(papers[3].arxiv_id)]
-            )]
+            [
+                _tool_use_block(
+                    [
+                        _synthesis_dict(papers[0].arxiv_id),
+                        _synthesis_dict(fake_id),
+                        _synthesis_dict(papers[2].arxiv_id),
+                        _synthesis_dict(papers[3].arxiv_id),
+                    ]
+                )
+            ]
         ),
         # Round 2: retries the missing one.
-        _fake_message(
-            [_tool_use_block([_synthesis_dict(papers[1].arxiv_id)])]
-        ),
+        _fake_message([_tool_use_block([_synthesis_dict(papers[1].arxiv_id)])]),
     ]
     agent = SynthesisAgent(_fake_client_seq(responses))
 
@@ -496,19 +482,19 @@ async def test_synthesize_treats_duplicate_arxiv_id_as_batch_failure() -> None:
     responses = [
         # Round 1: duplicate of papers[0].
         _fake_message(
-            [_tool_use_block(
-                [
-                    _synthesis_dict(papers[0].arxiv_id),
-                    _synthesis_dict(papers[0].arxiv_id),  # duplicate
-                    _synthesis_dict(papers[2].arxiv_id),
-                    _synthesis_dict(papers[3].arxiv_id),
-                ]
-            )]
+            [
+                _tool_use_block(
+                    [
+                        _synthesis_dict(papers[0].arxiv_id),
+                        _synthesis_dict(papers[0].arxiv_id),  # duplicate
+                        _synthesis_dict(papers[2].arxiv_id),
+                        _synthesis_dict(papers[3].arxiv_id),
+                    ]
+                )
+            ]
         ),
         # Round 2: retry covers all 4 (assume it succeeds).
-        _fake_message(
-            [_tool_use_block([_synthesis_dict(p.arxiv_id) for p in papers])]
-        ),
+        _fake_message([_tool_use_block([_synthesis_dict(p.arxiv_id) for p in papers])]),
     ]
     agent = SynthesisAgent(_fake_client_seq(responses))
 
@@ -530,16 +516,16 @@ async def test_synthesize_treats_refusal_as_batch_failure() -> None:
         # Round 1: model emits only text, no tool_use.
         _fake_message([_text_block("I cannot complete this.")], stop_reason="refusal"),
         # Round 2: succeeds.
-        _fake_message(
-            [_tool_use_block([_synthesis_dict(p.arxiv_id) for p in papers])]
-        ),
+        _fake_message([_tool_use_block([_synthesis_dict(p.arxiv_id) for p in papers])]),
     ]
     agent = SynthesisAgent(_fake_client_seq(responses))
 
     result = await agent.synthesize(topic="t", papers=papers)
     assert len(result.syntheses) == 4
     # One ErrorRecord for the round-1 refusal.
-    assert any("refusal" in r.message.lower() or "no tool_use" in r.message for r in result.error_records)
+    assert any(
+        "refusal" in r.message.lower() or "no tool_use" in r.message for r in result.error_records
+    )
 
 
 # ───── SDK wiring ───────────────────────────────────────────────────────
@@ -548,9 +534,7 @@ async def test_synthesize_treats_refusal_as_batch_failure() -> None:
 async def test_synthesize_passes_haiku_and_forces_tool_choice() -> None:
     """First batch call goes to Haiku with forced tool_choice."""
     papers = _papers(4)
-    response = _fake_message(
-        [_tool_use_block([_synthesis_dict(p.arxiv_id) for p in papers])]
-    )
+    response = _fake_message([_tool_use_block([_synthesis_dict(p.arxiv_id) for p in papers])])
     client = _fake_client_seq([response])
     agent = SynthesisAgent(client)
 
@@ -565,9 +549,7 @@ async def test_synthesize_passes_haiku_and_forces_tool_choice() -> None:
 async def test_synthesize_user_message_carries_full_abstracts() -> None:
     """Each batch's user message includes the full abstract for every paper in it."""
     papers = _papers(4)
-    response = _fake_message(
-        [_tool_use_block([_synthesis_dict(p.arxiv_id) for p in papers])]
-    )
+    response = _fake_message([_tool_use_block([_synthesis_dict(p.arxiv_id) for p in papers])])
     client = _fake_client_seq([response])
     agent = SynthesisAgent(client)
 

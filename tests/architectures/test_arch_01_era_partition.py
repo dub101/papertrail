@@ -167,8 +167,12 @@ async def test_partition_happy_path_two_eras_over_six_papers() -> None:
     """6 papers split into 2 balanced eras; all paper_ids covered."""
     papers = _papers(6)
     eras = [
-        _era_dict(era_id="foundations", paper_ids=[p.arxiv_id for p in papers[:3]], start=2014, end=2018),
-        _era_dict(era_id="extensions", paper_ids=[p.arxiv_id for p in papers[3:]], start=2017, end=2022),
+        _era_dict(
+            era_id="foundations", paper_ids=[p.arxiv_id for p in papers[:3]], start=2014, end=2018
+        ),
+        _era_dict(
+            era_id="extensions", paper_ids=[p.arxiv_id for p in papers[3:]], start=2017, end=2022
+        ),
     ]
     response = _fake_message([_tool_use_block(eras)])
     agent = EraPartitionAgent(_fake_client(response))
@@ -187,8 +191,12 @@ async def test_partition_allows_overlapping_year_ranges() -> None:
     """Eras with overlapping year ranges are accepted (content-driven)."""
     papers = _papers(4)
     eras = [
-        _era_dict(era_id="a", paper_ids=[papers[0].arxiv_id, papers[1].arxiv_id], start=2014, end=2020),
-        _era_dict(era_id="b", paper_ids=[papers[2].arxiv_id, papers[3].arxiv_id], start=2018, end=2022),
+        _era_dict(
+            era_id="a", paper_ids=[papers[0].arxiv_id, papers[1].arxiv_id], start=2014, end=2020
+        ),
+        _era_dict(
+            era_id="b", paper_ids=[papers[2].arxiv_id, papers[3].arxiv_id], start=2018, end=2022
+        ),
     ]
     response = _fake_message([_tool_use_block(eras)])
     agent = EraPartitionAgent(_fake_client(response))
@@ -216,7 +224,9 @@ async def test_partition_allows_open_ended_era() -> None:
     papers = _papers(4)
     eras = [
         _era_dict(era_id="past", paper_ids=[p.arxiv_id for p in papers[:2]], start=2014, end=2020),
-        _era_dict(era_id="frontier", paper_ids=[p.arxiv_id for p in papers[2:]], start=2021, end=None),
+        _era_dict(
+            era_id="frontier", paper_ids=[p.arxiv_id for p in papers[2:]], start=2021, end=None
+        ),
     ]
     response = _fake_message([_tool_use_block(eras)])
     agent = EraPartitionAgent(_fake_client(response))
@@ -236,9 +246,7 @@ async def test_partition_records_token_usage_and_cost() -> None:
         _era_dict(era_id="a", paper_ids=[p.arxiv_id for p in papers[:2]]),
         _era_dict(era_id="b", paper_ids=[p.arxiv_id for p in papers[2:]]),
     ]
-    response = _fake_message(
-        [_tool_use_block(eras)], input_tokens=4000, output_tokens=900
-    )
+    response = _fake_message([_tool_use_block(eras)], input_tokens=4000, output_tokens=900)
     agent = EraPartitionAgent(_fake_client(response))
 
     result = await agent.partition(topic="t", papers=papers, syntheses=_syntheses(papers))
@@ -299,9 +307,7 @@ async def test_partition_user_message_carries_topic_and_full_synthesis() -> None
 
 async def test_partition_raises_refusal_on_no_tool_use_block() -> None:
     papers = _papers(4)
-    response = _fake_message(
-        [_text_block("I cannot complete this task.")], stop_reason="refusal"
-    )
+    response = _fake_message([_text_block("I cannot complete this task.")], stop_reason="refusal")
     agent = EraPartitionAgent(_fake_client(response))
 
     with pytest.raises(EraPartitionRefusedError) as exc_info:
@@ -340,10 +346,7 @@ async def test_partition_raises_when_below_two_eras() -> None:
 async def test_partition_raises_when_above_four_eras() -> None:
     """Schema ceiling of 4 eras."""
     papers = _papers(5)
-    five_eras = [
-        _era_dict(era_id=f"era{i}", paper_ids=[papers[i].arxiv_id])
-        for i in range(5)
-    ]
+    five_eras = [_era_dict(era_id=f"era{i}", paper_ids=[papers[i].arxiv_id]) for i in range(5)]
     response = _fake_message([_tool_use_block(five_eras)])
     agent = EraPartitionAgent(_fake_client(response))
 
@@ -370,7 +373,8 @@ async def test_partition_raises_on_too_short_narrative() -> None:
     papers = _papers(4)
     bad_eras = [
         _era_dict(
-            era_id="a", paper_ids=[p.arxiv_id for p in papers[:2]],
+            era_id="a",
+            paper_ids=[p.arxiv_id for p in papers[:2]],
             narrative="Too short.",
         ),
         _era_dict(era_id="b", paper_ids=[p.arxiv_id for p in papers[2:]]),
@@ -403,7 +407,9 @@ async def test_partition_raises_when_paper_assigned_to_multiple_eras() -> None:
     papers = _papers(4)
     bad_eras = [
         _era_dict(era_id="a", paper_ids=[papers[0].arxiv_id, papers[1].arxiv_id]),
-        _era_dict(era_id="b", paper_ids=[papers[1].arxiv_id, papers[2].arxiv_id, papers[3].arxiv_id]),
+        _era_dict(
+            era_id="b", paper_ids=[papers[1].arxiv_id, papers[2].arxiv_id, papers[3].arxiv_id]
+        ),
     ]
     response = _fake_message([_tool_use_block(bad_eras)])
     agent = EraPartitionAgent(_fake_client(response))
@@ -445,8 +451,10 @@ async def test_partition_raises_when_end_year_before_start_year() -> None:
     papers = _papers(4)
     bad_eras = [
         _era_dict(
-            era_id="a", paper_ids=[p.arxiv_id for p in papers[:2]],
-            start=2020, end=2018,  # end before start
+            era_id="a",
+            paper_ids=[p.arxiv_id for p in papers[:2]],
+            start=2020,
+            end=2018,  # end before start
         ),
         _era_dict(era_id="b", paper_ids=[p.arxiv_id for p in papers[2:]]),
     ]

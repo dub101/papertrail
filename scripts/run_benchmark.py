@@ -122,11 +122,14 @@ def _build_client() -> object:
         )
         raise SystemExit(2)
     from anthropic import AsyncAnthropic
+
     return AsyncAnthropic(api_key=api_key)
 
 
 def _pick_evaluator(
-    args: argparse.Namespace, *, client: object | None,
+    args: argparse.Namespace,
+    *,
+    client: object | None,
 ) -> EvaluatorLike | None:
     """Construct the evaluator implied by the CLI flags.
 
