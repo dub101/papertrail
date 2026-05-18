@@ -354,9 +354,7 @@ class ExecutiveSummaryAgent:
         ]
         for era in eras:
             end_year_repr = (
-                str(era.date_range_end_year)
-                if era.date_range_end_year is not None
-                else "ongoing"
+                str(era.date_range_end_year) if era.date_range_end_year is not None else "ongoing"
             )
             lines.extend(
                 [

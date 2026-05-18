@@ -42,7 +42,9 @@ def _era_narrative() -> str:
     )
 
 
-def _era(era_id: str, paper_ids: list[str], *, start: int = 2017, end: int | None = 2020) -> EraEntry:
+def _era(
+    era_id: str, paper_ids: list[str], *, start: int = 2017, end: int | None = 2020
+) -> EraEntry:
     return EraEntry(
         era_id=era_id,
         name=era_id.replace("-", " ").title(),
@@ -164,9 +166,7 @@ async def test_summarize_happy_path_returns_summary_and_confidence() -> None:
     response = _fake_message([_tool_use_block(_summary_dict(confidence=0.85))])
     agent = ExecutiveSummaryAgent(_fake_client(response))
 
-    result = await agent.summarize(
-        topic="positional encodings", eras=eras, syntheses=syntheses
-    )
+    result = await agent.summarize(topic="positional encodings", eras=eras, syntheses=syntheses)
 
     assert _valid_summary_text() == result.summary
     assert result.confidence == 0.85
@@ -264,9 +264,7 @@ async def test_summarize_user_message_handles_ongoing_era_open_end() -> None:
 
 async def test_summarize_raises_refusal_on_no_tool_use_block() -> None:
     eras, syntheses = _two_eras_eight_papers()
-    response = _fake_message(
-        [_text_block("I cannot complete this task.")], stop_reason="refusal"
-    )
+    response = _fake_message([_text_block("I cannot complete this task.")], stop_reason="refusal")
     agent = ExecutiveSummaryAgent(_fake_client(response))
 
     with pytest.raises(ExecutiveSummaryRefusedError) as exc_info:
@@ -328,9 +326,7 @@ async def test_summarize_accepts_confidence_boundary_values() -> None:
     """0.0 and 1.0 are inclusive bounds and should pass."""
     eras, syntheses = _two_eras_eight_papers()
     for value in (0.0, 1.0):
-        response = _fake_message(
-            [_tool_use_block(_summary_dict(confidence=value))]
-        )
+        response = _fake_message([_tool_use_block(_summary_dict(confidence=value))])
         agent = ExecutiveSummaryAgent(_fake_client(response))
         result = await agent.summarize(topic="t", eras=eras, syntheses=syntheses)
         assert result.confidence == value

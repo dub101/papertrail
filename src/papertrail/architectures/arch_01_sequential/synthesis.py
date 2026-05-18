@@ -353,9 +353,7 @@ class SynthesisAgent:
 
         # ─── Round 1: parallel synthesis over balanced batches ───
         round1_batches = _partition(papers)
-        round1_outcomes = await self._gather_batches(
-            topic=topic, batches=round1_batches
-        )
+        round1_outcomes = await self._gather_batches(topic=topic, batches=round1_batches)
         round1_in, round1_out = self._absorb(
             batches=round1_batches,
             outcomes=round1_outcomes,
@@ -374,9 +372,7 @@ class SynthesisAgent:
             by_id = {p.arxiv_id: p for p in papers}
             missing_papers = [by_id[aid] for aid in missing_ids]
             round2_batches = _partition(missing_papers)
-            round2_outcomes = await self._gather_batches(
-                topic=topic, batches=round2_batches
-            )
+            round2_outcomes = await self._gather_batches(topic=topic, batches=round2_batches)
             round2_in, round2_out = self._absorb(
                 batches=round2_batches,
                 outcomes=round2_outcomes,
@@ -442,9 +438,7 @@ class SynthesisAgent:
         contract than ``return_exceptions=True`` because it lets us
         track tokens spent on failed batches too.
         """
-        outcomes = await asyncio.gather(
-            *[self._safe_batch(topic=topic, batch=b) for b in batches]
-        )
+        outcomes = await asyncio.gather(*[self._safe_batch(topic=topic, batch=b) for b in batches])
         return list(outcomes)
 
     async def _safe_batch(
@@ -529,8 +523,7 @@ class SynthesisAgent:
                 return output, in_tokens, out_tokens
 
         raise RuntimeError(
-            f"Synthesis batch returned no tool_use block; "
-            f"stop_reason={response.stop_reason!r}"
+            f"Synthesis batch returned no tool_use block; stop_reason={response.stop_reason!r}"
         )
 
     @staticmethod
@@ -550,13 +543,11 @@ class SynthesisAgent:
         fabricated = set(emitted) - input_ids
         if fabricated:
             raise RuntimeError(
-                f"Synthesis batch fabricated arxiv_ids not in the input: "
-                f"{sorted(fabricated)}"
+                f"Synthesis batch fabricated arxiv_ids not in the input: {sorted(fabricated)}"
             )
         if len(emitted) != len(set(emitted)):
             raise RuntimeError(
-                f"Synthesis batch produced duplicate entries for "
-                f"arxiv_ids: {sorted(emitted)}"
+                f"Synthesis batch produced duplicate entries for arxiv_ids: {sorted(emitted)}"
             )
 
     # ─── Round absorption ───────────────────────────────────────────────

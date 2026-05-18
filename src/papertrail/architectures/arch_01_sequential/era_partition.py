@@ -129,12 +129,8 @@ class EraEntry(_StrictModel):
     )
     name: str = Field(min_length=1, max_length=80)
     date_range_start_year: int = Field(ge=_YEAR_MIN, le=_YEAR_MAX)
-    date_range_end_year: int | None = Field(
-        default=None, ge=_YEAR_MIN, le=_YEAR_MAX
-    )
-    narrative: str = Field(
-        min_length=_NARRATIVE_MIN_CHARS, max_length=_NARRATIVE_MAX_CHARS
-    )
+    date_range_end_year: int | None = Field(default=None, ge=_YEAR_MIN, le=_YEAR_MAX)
+    narrative: str = Field(min_length=_NARRATIVE_MIN_CHARS, max_length=_NARRATIVE_MAX_CHARS)
     paper_ids: list[str] = Field(min_length=1)
 
 
@@ -313,13 +309,10 @@ class EraPartitionAgent:
         missing_synth = [p.arxiv_id for p in papers if p.arxiv_id not in synth_by_id]
         if missing_synth:
             raise EraPartitionInvalidOutputError(
-                f"partition() input mismatch: papers without synthesis: "
-                f"{sorted(missing_synth)}"
+                f"partition() input mismatch: papers without synthesis: {sorted(missing_synth)}"
             )
 
-        user_content = self._render(
-            topic=topic, papers=papers, synth_by_id=synth_by_id
-        )
+        user_content = self._render(topic=topic, papers=papers, synth_by_id=synth_by_id)
 
         tool_definition: ToolParam = {
             "name": self.TOOL_NAME,
@@ -343,9 +336,7 @@ class EraPartitionAgent:
         input_ids = [p.arxiv_id for p in papers]
         self._validate_cross_field(partition=partition, input_ids=input_ids)
 
-        papers_by_era = {
-            era.era_id: tuple(era.paper_ids) for era in partition.eras
-        }
+        papers_by_era = {era.era_id: tuple(era.paper_ids) for era in partition.eras}
 
         input_tokens = int(getattr(response.usage, "input_tokens", 0) or 0)
         output_tokens = int(getattr(response.usage, "output_tokens", 0) or 0)
@@ -434,9 +425,7 @@ class EraPartitionAgent:
         )
 
     @staticmethod
-    def _validate_cross_field(
-        *, partition: EraPartition, input_ids: list[str]
-    ) -> None:
+    def _validate_cross_field(*, partition: EraPartition, input_ids: list[str]) -> None:
         """Run the four invariants JSON Schema cannot express.
 
         Order: fabricated > duplicate-paper > duplicate-era > missing
@@ -454,8 +443,7 @@ class EraPartitionAgent:
         fabricated = assigned_set - input_set
         if fabricated:
             raise EraPartitionInvalidOutputError(
-                f"Era partition references arxiv_ids not in the input: "
-                f"{sorted(fabricated)}"
+                f"Era partition references arxiv_ids not in the input: {sorted(fabricated)}"
             )
 
         # A paper appears in multiple eras iff it appears more than once
@@ -489,8 +477,7 @@ class EraPartitionAgent:
         missing = input_set - assigned_set
         if missing:
             raise EraPartitionInvalidOutputError(
-                f"{len(missing)} input paper(s) not assigned to any era: "
-                f"{sorted(missing)}"
+                f"{len(missing)} input paper(s) not assigned to any era: {sorted(missing)}"
             )
 
         for era in partition.eras:

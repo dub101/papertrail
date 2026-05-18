@@ -90,7 +90,9 @@ def _synthesis(arxiv_id: str, *, confidence: float = 0.85) -> PaperSynthesis:
     )
 
 
-def _era(era_id: str, paper_ids: list[str], *, start: int = 2014, end: int | None = 2020) -> EraEntry:
+def _era(
+    era_id: str, paper_ids: list[str], *, start: int = 2014, end: int | None = 2020
+) -> EraEntry:
     narrative = (
         f"The {era_id} era marks a methodological shift. Researchers moved "
         "from one set of assumptions to a substantively different framing, "
@@ -261,9 +263,7 @@ def _patch_all_agents(
         patch.object(TriageAgent, "triage", new=AsyncMock(return_value=triage)),
         patch.object(SynthesisAgent, "synthesize", new=AsyncMock(return_value=synth)),
         patch.object(EraPartitionAgent, "partition", new=AsyncMock(return_value=eras)),
-        patch.object(
-            ExecutiveSummaryAgent, "summarize", new=AsyncMock(return_value=exec_summary)
-        ),
+        patch.object(ExecutiveSummaryAgent, "summarize", new=AsyncMock(return_value=exec_summary)),
     )
 
 
@@ -447,7 +447,9 @@ async def test_telemetry_sums_tokens_and_cost_across_stages() -> None:
         triage=_triage_result(papers, input_tokens=2000, output_tokens=500, cost_usd=0.0045),
         synth=_synthesis_result(papers, input_tokens=3000, output_tokens=1000, cost_usd=0.008),
         eras=_era_partition_result(papers, input_tokens=2500, output_tokens=400, cost_usd=0.0045),
-        exec_summary=_executive_summary_result(input_tokens=4000, output_tokens=200, cost_usd=0.005),
+        exec_summary=_executive_summary_result(
+            input_tokens=4000, output_tokens=200, cost_usd=0.005
+        ),
     )
 
     arch = SequentialArchitecture(_fake_client())
@@ -484,12 +486,14 @@ async def test_telemetry_aggregates_error_records_from_search_and_synthesis() ->
     """error_records from search + synthesis flow into Telemetry.errors."""
     papers = _papers(8)
     search_error = ErrorRecord(
-        step_index=1, category="api",
+        step_index=1,
+        category="api",
         message="search hit cap, recovered with 8 papers",
         recovered=True,
     )
     synth_error = ErrorRecord(
-        step_index=3, category="api",
+        step_index=3,
+        category="api",
         message="synthesis batch 2 failed",
         recovered=True,
     )
@@ -586,9 +590,7 @@ async def test_supplied_prompt_versions_recorded() -> None:
 async def test_run_propagates_search_insufficient_results_error() -> None:
     """SearchInsufficientResultsError from stage 1 bubbles up cleanly."""
     arch = SequentialArchitecture(_fake_client())
-    err = SearchInsufficientResultsError(
-        topic="niche-topic", found=2, stop_reason="end_turn"
-    )
+    err = SearchInsufficientResultsError(topic="niche-topic", found=2, stop_reason="end_turn")
     with (
         patch.object(SearchAgent, "search", new=AsyncMock(side_effect=err)),
         pytest.raises(SearchInsufficientResultsError) as exc_info,

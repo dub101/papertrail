@@ -58,9 +58,7 @@ def _decision(arxiv_id: str, verdict: str, reason: str = "test reason") -> dict[
     return {"arxiv_id": arxiv_id, "verdict": verdict, "reason": reason}
 
 
-def _tool_use_block(
-    tool_input: dict[str, Any], *, name: str = "submit_triage"
-) -> MagicMock:
+def _tool_use_block(tool_input: dict[str, Any], *, name: str = "submit_triage") -> MagicMock:
     """Build a fake content block that looks like an SDK ``ToolUseBlock``."""
     block = MagicMock()
     block.type = "tool_use"
@@ -101,9 +99,7 @@ def _fake_client(response: MagicMock) -> MagicMock:
     return client
 
 
-def _make_selection_input(
-    candidates: list[ArxivPaper], *, include_first_n: int
-) -> dict[str, Any]:
+def _make_selection_input(candidates: list[ArxivPaper], *, include_first_n: int) -> dict[str, Any]:
     """Build a valid ``TriageSelection`` input dict: include first N, reject rest."""
     decisions = []
     for idx, p in enumerate(candidates):
@@ -150,9 +146,7 @@ async def test_triage_happy_path_returns_selected_and_records() -> None:
 
     assert len(result.selected) == 8
     # Model-emitted order is preserved on selected.
-    assert [p.arxiv_id for p in result.selected] == [
-        candidates[i].arxiv_id for i in range(8)
-    ]
+    assert [p.arxiv_id for p in result.selected] == [candidates[i].arxiv_id for i in range(8)]
     # Every candidate gets a CandidateRecord with title carried forward.
     assert len(result.candidate_records) == 15
     rec_by_id = {r.arxiv_id: r for r in result.candidate_records}
@@ -266,9 +260,7 @@ async def test_triage_raises_when_tool_name_is_different() -> None:
     candidates = _candidates(10)
     selection_input = _make_selection_input(candidates, include_first_n=5)
     # Same input, but called with the wrong tool name.
-    response = _fake_message(
-        [_tool_use_block(selection_input, name="some_other_tool")]
-    )
+    response = _fake_message([_tool_use_block(selection_input, name="some_other_tool")])
     agent = TriageAgent(_fake_client(response))
 
     with pytest.raises(TriageRefusedError):
@@ -284,9 +276,7 @@ async def test_triage_raises_on_invalid_verdict_value() -> None:
     bogus_input = {
         "decisions": [
             {"arxiv_id": candidates[0].arxiv_id, "verdict": "maybe", "reason": "huh"},
-            *[
-                _decision(c.arxiv_id, "rejected") for c in candidates[1:]
-            ],
+            *[_decision(c.arxiv_id, "rejected") for c in candidates[1:]],
         ]
     }
     response = _fake_message([_tool_use_block(bogus_input)])

@@ -121,8 +121,7 @@ def _resolve_architecture(
     factory = ARCHITECTURES.get(architecture)
     if factory is None:
         raise ValueError(
-            f"Unknown architecture {architecture!r}. "
-            f"Available: {sorted(ARCHITECTURES)}"
+            f"Unknown architecture {architecture!r}. Available: {sorted(ARCHITECTURES)}"
         )
     return factory(client)
 

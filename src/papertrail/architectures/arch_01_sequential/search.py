@@ -299,9 +299,7 @@ class SearchAgent:
             # Append the full assistant turn — including any text blocks and
             # all tool_use blocks — so the next iteration sees the model's
             # own reasoning trail. The SDK accepts content blocks directly.
-            messages.append(
-                {"role": "assistant", "content": cast("Any", response.content)}
-            )
+            messages.append({"role": "assistant", "content": cast("Any", response.content)})
 
             if final_stop_reason == "end_turn":
                 # Primary exit. The model decided coverage is adequate.
@@ -320,8 +318,7 @@ class SearchAgent:
                         # Defensive: only one tool exists. Anything else is
                         # a schema violation and should surface immediately.
                         raise RuntimeError(
-                            f"SearchAgent received unexpected tool call: "
-                            f"{block.name!r}"
+                            f"SearchAgent received unexpected tool call: {block.name!r}"
                         )
                     tool_input = cast("dict[str, Any]", block.input)
                     query = str(tool_input.get("query", ""))
@@ -329,9 +326,7 @@ class SearchAgent:
                     queries_issued.append(query)
 
                     try:
-                        papers = await arxiv_search(
-                            query=query, max_results=max_results
-                        )
+                        papers = await arxiv_search(query=query, max_results=max_results)
                     except httpx.HTTPError as e:
                         # arxiv failure mid-loop — record and exit with
                         # whatever we've already collected. Without this
@@ -371,9 +366,7 @@ class SearchAgent:
                     # Inner ``for block`` completed without ``break`` —
                     # all tool_use blocks were processed successfully.
                     # Continue the outer while loop normally.
-                    messages.append(
-                        {"role": "user", "content": cast("Any", tool_result_blocks)}
-                    )
+                    messages.append({"role": "user", "content": cast("Any", tool_result_blocks)})
                     continue
                 # Inner loop broke due to arxiv error — fall through to
                 # outer break.
@@ -495,9 +488,7 @@ def _format_compact_result(
         primary_category = paper.categories[0] if paper.categories else "unknown"
         year = paper.published.year
         first_sentence = _first_sentence(paper.abstract)
-        lines.append(
-            f"{idx}. arxiv_id={paper.arxiv_id}  ({year}, {primary_category})"
-        )
+        lines.append(f"{idx}. arxiv_id={paper.arxiv_id}  ({year}, {primary_category})")
         lines.append(f'   "{paper.title}"')
         lines.append(f"   {first_sentence}")
     return "\n".join(lines)

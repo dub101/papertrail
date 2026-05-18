@@ -156,9 +156,7 @@ async def test_search_happy_path_returns_deduped_papers() -> None:
 
     # 9 distinct papers across the two calls.
     assert len(result.papers) == 9
-    assert [p.arxiv_id for p in result.papers] == [
-        f"1706.{i:05d}" for i in range(9)
-    ]
+    assert [p.arxiv_id for p in result.papers] == [f"1706.{i:05d}" for i in range(9)]
     assert result.telemetry.iterations_used == 3
     assert result.telemetry.queries_issued == ("q1", "q2")
     assert result.telemetry.final_stop_reason == "end_turn"
@@ -182,9 +180,7 @@ async def test_search_deduplicates_across_calls() -> None:
         result = await agent.search("attention")
 
     # 4 unique papers (0,1,2,3,4 minus the dup of 0).
-    assert {p.arxiv_id for p in result.papers} == {
-        f"1706.{i:05d}" for i in range(5)
-    }
+    assert {p.arxiv_id for p in result.papers} == {f"1706.{i:05d}" for i in range(5)}
     assert len(result.papers) == 5
     assert len(result.telemetry.queries_issued) == 2  # both queries recorded
 
