@@ -32,7 +32,11 @@ Cert mapping:
 
 from __future__ import annotations
 
+import json
+import os
+import tempfile
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Final, cast
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -388,6 +392,67 @@ def _format_deliverable_markdown(deliverable: Deliverable, *, topic: str) -> str
     return "\n".join(lines)
 
 
+# ───── Tool-input coercion (D4 TS 4.4 — format-mismatch recovery) ───────
+
+
+def _coerce_json_strings(value: Any) -> Any:
+    """Recursively replace JSON-string-encoded objects/arrays with parsed values.
+
+    Sonnet sometimes fills a forced ``tool_use`` input by serialising a nested
+    object as a JSON string instead of nesting it as a JSON object, e.g.::
+
+        {"selection_relevance": "{\\"score\\": 0.82, \\"rationale\\": \\"...\\"}"}
+
+    instead of::
+
+        {"selection_relevance": {"score": 0.82, "rationale": "..."}}
+
+    Pydantic then rejects the string as not-a-DimensionScore. The cert pattern
+    here is D4 TS 4.4: distinguish *format-mismatch* errors (recoverable by
+    coercion) from *content-absent* errors (require regeneration). This helper
+    handles the format-mismatch flavour. Genuine schema violations still raise
+    further down in ``EvaluatorVerdict.model_validate``.
+
+    Walks dicts and lists; on any string that successfully ``json.loads`` into
+    a dict or list, replaces it. Strings that don't parse, or parse into
+    primitives, are left untouched.
+    """
+    if isinstance(value, dict):
+        return {k: _coerce_json_strings(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_coerce_json_strings(v) for v in value]
+    if isinstance(value, str):
+        # Cheap pre-filter: only attempt parse if it looks like a container.
+        stripped = value.lstrip()
+        if stripped.startswith(("{", "[")):
+            try:
+                parsed = json.loads(value)
+            except (json.JSONDecodeError, ValueError):
+                return value
+            if isinstance(parsed, (dict, list)):
+                return _coerce_json_strings(parsed)
+    return value
+
+
+def _dump_tool_input(raw: Any, coerced: Any) -> Path:
+    """Write both the raw and post-coercion tool_input to a temp JSON file.
+
+    Returns the path. Used when validation fails so the user can inspect
+    what Sonnet actually sent — pydantic's error message truncates long
+    values, which hides the actual shape we need to debug.
+    """
+    fd, path_str = tempfile.mkstemp(prefix="evaluator_tool_input_", suffix=".json", text=True)
+    # mkstemp opens an fd we don't need (using the path with our own open).
+    os.close(fd)
+    path = Path(path_str)
+    payload = {"raw": raw, "coerced": coerced}
+    # default=repr handles any non-JSON-serialisable leaf (e.g. odd primitives
+    # the SDK might surface) without crashing the dump.
+    with path.open("w", encoding="utf-8") as fh:
+        json.dump(payload, fh, indent=2, default=repr)
+    return path
+
+
 # ───── The real evaluator ───────────────────────────────────────────────
 
 
@@ -404,15 +469,18 @@ class Evaluator:
         4. Pull the ``tool_use`` content block, validate its ``input`` back
            into ``EvaluatorVerdict``, wrap with provenance, return.
 
-    Why no retry on failure:
-        Per the step-5 decision: raise the first time the model misbehaves
-        and let the user read the error to fix the cause (prompt, schema,
-        or deliverable). Retry-with-feedback (D4 TS 4.4) is a real pattern,
-        but adding it now would mask which failure mode we actually hit and
-        double the cost ceiling unpredictably.
+    Failure policy:
+        One narrow recovery — observed Sonnet quirk where nested objects in
+        tool_use input arrive as JSON strings (see ``_coerce_json_strings``).
+        We coerce that one format-mismatch shape before validation. Every
+        other failure (refusal, wrong tool name, genuinely malformed input)
+        still raises on the first occurrence so the user can read the error
+        and fix the cause. No API-level retry-with-feedback yet.
 
     Cert mappings:
         - **D4 TS 4.3** — forced tool_use with strict JSON schema.
+        - **D4 TS 4.4** — validation + format-mismatch recovery via
+          ``_coerce_json_strings`` before schema validation.
         - **D4 TS 4.6** — independent review instance (Sonnet judging Haiku
           per ADR-0003), self-reported confidence for calibrated routing.
     """
@@ -546,10 +614,21 @@ class Evaluator:
                 getattr(block, "name", None) == self.TOOL_NAME
             ):
                 tool_input = getattr(block, "input", None)
+                # Sonnet occasionally serialises nested objects as JSON strings
+                # in tool_use input; recover before strict validation. See
+                # _coerce_json_strings for the D4 TS 4.4 rationale.
+                tool_input = _coerce_json_strings(tool_input)
                 try:
                     return EvaluatorVerdict.model_validate(tool_input)
                 except ValidationError as e:
-                    raise EvaluatorInvalidOutputError(str(e)) from e
+                    # Persist the raw + coerced input so the user can inspect
+                    # exactly what Sonnet sent when the error message itself
+                    # truncates. This is the actionable artifact under the
+                    # strict-on-failure policy.
+                    dump_path = _dump_tool_input(getattr(block, "input", None), tool_input)
+                    raise EvaluatorInvalidOutputError(
+                        f"{e}\n(raw + coerced tool_input written to {dump_path})"
+                    ) from e
 
         # No matching tool_use block. Build a short summary of what we got
         # so the user can read the actual response when debugging.
