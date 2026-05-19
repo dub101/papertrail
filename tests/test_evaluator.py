@@ -20,6 +20,7 @@ DryRunEvaluator gets its own dedicated tests below.
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, date, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -355,6 +356,51 @@ async def test_evaluate_raises_invalid_output_on_missing_required_field() -> Non
 
     with pytest.raises(EvaluatorInvalidOutputError):
         await evaluator.evaluate(_make_deliverable(), topic="t")
+
+
+# ───── Format-mismatch coercion (D4 TS 4.4) ─────────────────────────────
+
+
+async def test_evaluate_coerces_json_string_encoded_subobjects() -> None:
+    # Sonnet sometimes serialises nested DimensionScore objects as JSON
+    # strings inside the tool_use input. Reproduce that shape and verify
+    # _coerce_json_strings recovers it before validation.
+    valid = _valid_verdict_input()
+    sonnet_quirk: dict[str, Any] = dict(valid)
+    for field in (
+        "selection_relevance",
+        "timeline_quality",
+        "timeline_veracity",
+        "executive_summary",
+    ):
+        sonnet_quirk[field] = json.dumps(valid[field])
+    # Also test depth-2: stringify a DimensionScore nested inside synthesis.
+    nested_synthesis = dict(valid["synthesis"])
+    nested_synthesis["about"] = json.dumps(valid["synthesis"]["about"])
+    sonnet_quirk["synthesis"] = nested_synthesis
+
+    client = _fake_client(_fake_response([_tool_use_block("submit_evaluation", sonnet_quirk)]))
+    evaluator = Evaluator(client)
+
+    score = await evaluator.evaluate(_make_deliverable(), topic="t")
+
+    # Coerced fields round-trip to the same parsed values.
+    assert score.verdict.selection_relevance.score == 0.5
+    assert score.verdict.executive_summary.rationale == "ok"
+    assert score.verdict.synthesis.about.score == 0.5
+
+
+async def test_evaluate_leaves_non_json_strings_untouched() -> None:
+    # A field that is *legitimately* a string (``critique``) must not be
+    # mangled by coercion even if it happens to start with "{".
+    valid = _valid_verdict_input()
+    valid["critique"] = "{not a JSON object — just prose with a brace}"
+    client = _fake_client(_fake_response([_tool_use_block("submit_evaluation", valid)]))
+    evaluator = Evaluator(client)
+
+    score = await evaluator.evaluate(_make_deliverable(), topic="t")
+
+    assert score.verdict.critique == "{not a JSON object — just prose with a brace}"
 
 
 # ───── DryRunEvaluator ──────────────────────────────────────────────────
